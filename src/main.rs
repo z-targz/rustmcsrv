@@ -37,7 +37,7 @@ fn main() {
 }
 
 async fn handle_connection(mut stream: TcpStream) {
-    let buffer: [u8; MTU] = [0; MTU];
+    //let buffer: [u8; MTU] = [0; MTU];
 }
 
 fn handle_config() -> Result<HashMap<String, String>, std::io::Error> {
@@ -51,30 +51,3 @@ fn handle_config() -> Result<HashMap<String, String>, std::io::Error> {
     Ok(properties)
 }
 
-enum ConnectionState {
-    Handshake,
-    Status,
-    Login,
-    Play
-}
-
-pub struct StreamIterator {
-    stream: TcpStream,
-    buffer: Vec<u8>,
-}
-
-const HANDSHAKE_STATE_MAX_PACKET_SIZE: usize = 8;
-
-impl StreamIterator {
-    pub fn new(stream: TcpStream) -> Self {
-        StreamIterator { stream : stream, buffer : Vec::with_capacity(HANDSHAKE_STATE_MAX_PACKET_SIZE) }
-    }
-}
-
-impl Iterator for StreamIterator {
-    type Item = u8;
-    
-    fn next(&mut self) -> Option<Self::Item> {
-        todo!()
-    }
-}

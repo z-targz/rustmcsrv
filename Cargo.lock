@@ -214,8 +214,13 @@ name = "rustmcsrv"
 version = "0.1.0"
 dependencies = [
  "futures",
+ "server_util",
  "uuid",
 ]
+
+[[package]]
+name = "server_util"
+version = "0.1.0"
 
 [[package]]
 name = "slab"
