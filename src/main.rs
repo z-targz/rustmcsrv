@@ -3,9 +3,20 @@ use std::fs::{OpenOptions, File};
 use std::path::Path;
 use std::collections::HashMap;
 use std::io::{Write, BufReader};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{SocketAddr};
+use std::sync::RwLock;
+
 use futures::executor::{ThreadPool, ThreadPoolBuilder};
 use futures::task::FutureObj;
+use futures::future::Lazy;
+use futures::StreamExt;
+
+use async_std::net::{TcpListener, TcpStream};
+
+use lazy_static::lazy_static;
+
+use crate::server::Server;
+use crate::server::Connection;
 
 mod player;
 mod server;
@@ -18,27 +29,49 @@ const MTU: usize = 1500;
 const PORT: u16 = 25565;
 const TOTAL_THREADS: usize = 8;
 const MOTD: &str = "A Minecraft Server (Made with Rust!)";
+const MAX_PLAYERS: usize = 32;
 
-fn main() {
-    let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], PORT))).unwrap_or_else(|e| {
+lazy_static! {
+    pub static ref THE_SERVER: RwLock<Server> = RwLock::new(Server::new(MAX_PLAYERS));
+}
+
+#[async_std::main]
+async fn main() {
+    let mut the_server = Server::new(MAX_PLAYERS);
+
+    let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], PORT))).await.unwrap_or_else(|e| {
         eprintln!("Error: {e}");
         std::process::exit(1);
     });
 
-    let mut thread_pool_builder = ThreadPoolBuilder::new();
+    /*let mut thread_pool_builder = ThreadPoolBuilder::new();
+    thread_pool_builder.pool_size(TOTAL_THREADS - 3);
+    let pool = thread_pool_builder.create().unwrap();*/
+    
+    let mut thread_pool_builder = async_executors::ThreadPool::builder();
     thread_pool_builder.pool_size(TOTAL_THREADS - 3);
     let pool = thread_pool_builder.create().unwrap();
 
-    for stream in listener.incoming() {
-        let stream = stream.unwrap();
+    listener.incoming().for_each_concurrent(None, |stream| async {
+        match stream {
+            Ok(tcpstream) => {
+                {
+                    let mut w = THE_SERVER.write().unwrap();
+                    let n = w.add_connection(tcpstream);
+                    let c = &mut w.get_connections_mut().get_mut(n).unwrap();
 
-        let connection = handle_connection(stream);
-        pool.spawn_ok(connection);
-    }
+                    
+                    let connection = handle_connection(c);
+                    pool.spawn_ok(connection);
+                }
+            },
+            Err(_) => return
+        }  
+    }).await;
 }
 
-async fn handle_connection(mut stream: TcpStream) {
-    //let buffer: [u8; MTU] = [0; MTU];
+pub async fn handle_connection(c: &'static mut Connection) {
+
 }
 
 fn handle_config() -> Result<HashMap<String, String>, std::io::Error> {

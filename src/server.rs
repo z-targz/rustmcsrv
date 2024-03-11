@@ -1,6 +1,6 @@
 
 use std::collections::HashMap;
-use std::net::TcpStream;
+use async_std::net::TcpStream;
 use uuid::Uuid;
 
 use crate::player::Player;
@@ -9,10 +9,29 @@ use crate::packet::Packet;
 type ConnectionID = usize;
 pub struct Server {
     //Server services all connections, including status and login
-    connections: HashMap<ConnectionID, Connection>,
+    connections: Vec<Connection>,
     //Only used in Play state
     uuids: HashMap<String, Uuid>,
     players: HashMap<Uuid, ConnectionID>
+}
+
+impl Server {
+    pub fn new(max_players: usize) -> Self {
+        Server { connections : Vec::with_capacity(max_players * 2), uuids : HashMap::with_capacity(max_players), players : HashMap::with_capacity(max_players) }
+    }
+
+    pub fn add_connection(&mut self, stream: TcpStream) -> usize {
+        self.connections.push(Connection::new(stream));
+        self.connections.len()-1
+    }
+
+    pub fn get_connections_mut(&mut self) -> &mut Vec<Connection> {
+        &mut self.connections
+    }
+
+    pub fn get_connections(&self) -> &Vec<Connection> {
+        &self.connections
+    }
 }
 
 pub enum ConnectionState {
@@ -33,7 +52,7 @@ impl Connection {
         Connection { stream : stream, player: None }
     }
     pub fn send_packet(packet: impl Packet) {
-
+        
     }
 }
 

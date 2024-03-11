@@ -1,16 +1,24 @@
+use std::error::Error;
+
+use server_util::error::IterEndError;
+
 use super::Packet;
 use crate::server::ConnectionState;
+use crate::packet::Serverbound;
+use crate::data::{read_var_int, read_string, read_ushort};
+
 
 pub struct SHandshake {
     id: i32,
     protocol_version: i32,
-    server_address: u16,
+    server_address: String,
+    server_port: u16,
     next_state: i32,
 }
 
 impl SHandshake {
-    pub fn new(protocol_version: i32, server_address: u16, next_state: i32) -> Self {
-        SHandshake { id : 0, protocol_version : protocol_version, server_address : server_address, next_state: next_state }
+    fn new(protocol_version: i32, server_address: String, server_port: u16, next_state: i32) -> Self {
+        SHandshake { id : 0, protocol_version : protocol_version, server_address : server_address, server_port : server_port, next_state: next_state }
     }
 }
 
@@ -21,7 +29,14 @@ impl Packet for SHandshake {
     fn get_associated_state(&self) -> ConnectionState {
         ConnectionState::Handshake
     }
-    fn to_be_bytes(&self) -> Vec<u8> {
-        protocol_version_var_int = create_var_int(self.protocol)
+}
+
+impl Serverbound for SHandshake {
+    fn read_packet(iter: &mut impl Iterator<Item = u8>) -> Result<Box<SHandshake>, Box<dyn Error>> {
+        let protocol_version: i32 = read_var_int(iter)?;
+        let server_address: String = read_string(iter)?;
+        let server_port: u16 = read_ushort(iter)?;
+        let next_state: i32 = read_var_int(iter)?;
+        Ok(Box::new(SHandshake::new(protocol_version, server_address, server_port, next_state)))
     }
 }

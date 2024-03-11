@@ -81,6 +81,12 @@ pub fn read_double(iter: &mut impl Iterator<Item = u8>) -> Result<f64, Box<dyn E
     Ok(f64::from_be_bytes(bytes.try_into().unwrap()))
 }
 
+pub fn read_ushort(iter: &mut impl Iterator<Item = u8>) -> Result<u16, Box<dyn Error>> {
+    let Some(byte1) = iter.next() else { return Err(IterEndError{})? };
+    let Some(byte2) = iter.next() else { return Err(IterEndError{})? };
+    Ok(u16::from_be_bytes([byte1, byte2]))
+}
+
 pub fn create_var_int(i: i32) -> Vec<u8> {
     let mut value: u32 = i.to_le() as u32;
     let mut out: Vec<u8> = Vec::with_capacity(5);
@@ -124,6 +130,10 @@ pub fn create_float(f: f32) -> Vec<u8> {
 
 pub fn create_double(d: f64) -> Vec<u8> {
     d.to_be_bytes().to_vec()
+}
+
+pub fn create_ushort(us: u16) -> Vec<u8> {
+    us.to_be_bytes().to_vec()
 }
 
 #[cfg(test)]

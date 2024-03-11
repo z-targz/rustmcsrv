@@ -3,10 +3,19 @@ name = "rustmcsrv"
 version = "0.1.0"
 edition = "2021"
 
+
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 server_util = { path = "./server_util" }
+
+[dependencies.lazy_static]
+version = "1.4.0"
+
+[dependencies.async_executors]
+version = "0.7.0"
+features = ["threadpool"]
 
 [dependencies.futures]
 version = "0.3.30"
@@ -22,5 +31,9 @@ features = [
     "fast-rng",          # Use a faster (but still sufficiently random) RNG
     "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
 ]
+
+[dependencies.async-std]
+version = "1.6"
+features = ["attributes"]
 
 
