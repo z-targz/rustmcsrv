@@ -1,4 +1,5 @@
 use super::Packet;
+use crate::server::ConnectionState;
 
 pub struct SHandshake {
     id: i32,
@@ -17,14 +18,10 @@ impl Packet for SHandshake {
     fn get_id(&self) -> i32{
         self.id
     }
-}
-
-pub struct CHandshake {
-    id: i32
-}
-
-impl CHandshake {
-    pub fn new() -> Self {
-        CHandshake { id : 0 }
+    fn get_associated_state(&self) -> ConnectionState {
+        ConnectionState::Handshake
+    }
+    fn to_be_bytes(&self) -> Vec<u8> {
+        protocol_version_var_int = create_var_int(self.protocol)
     }
 }

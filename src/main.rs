@@ -17,6 +17,7 @@ const MTU: usize = 1500;
 //TODO: Read these from server.properties
 const PORT: u16 = 25565;
 const TOTAL_THREADS: usize = 8;
+const MOTD: &str = "A Minecraft Server (Made with Rust!)";
 
 fn main() {
     let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], PORT))).unwrap_or_else(|e| {
