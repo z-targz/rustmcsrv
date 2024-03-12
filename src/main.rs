@@ -1,3 +1,5 @@
+use core::mem::drop;
+
 use std::fs;
 use std::fs::{OpenOptions, File};
 use std::path::Path;
@@ -31,13 +33,14 @@ const TOTAL_THREADS: usize = 8;
 const MOTD: &str = "A Minecraft Server (Made with Rust!)";
 const MAX_PLAYERS: usize = 32;
 
-lazy_static! {
+
+lazy_static!{
     pub static ref THE_SERVER: RwLock<Server> = RwLock::new(Server::new(MAX_PLAYERS));
 }
 
 #[async_std::main]
 async fn main() {
-    let mut the_server = Server::new(MAX_PLAYERS);
+    //let mut the_server = Server::new(MAX_PLAYERS);
 
     let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], PORT))).await.unwrap_or_else(|e| {
         eprintln!("Error: {e}");
@@ -56,12 +59,11 @@ async fn main() {
         match stream {
             Ok(tcpstream) => {
                 {
+                    let _ = tcpstream.set_nodelay(true);
                     let mut w = THE_SERVER.write().unwrap();
                     let n = w.add_connection(tcpstream);
-                    let c = &mut w.get_connections_mut().get_mut(n).unwrap();
-
-                    
-                    let connection = handle_connection(c);
+                    drop(w);
+                    let connection = handle_connection(n);
                     pool.spawn_ok(connection);
                 }
             },
@@ -70,9 +72,20 @@ async fn main() {
     }).await;
 }
 
-pub async fn handle_connection(c: &'static mut Connection) {
-
+use std::error::Error;
+pub async fn handle_connection(n: usize) {
+    let r = THE_SERVER.read().unwrap();
+    let w = r.get_connections().get(n).unwrap().write().unwrap();
+    {
+        
+    }
+    drop(w);
+    drop(r);
+    
+    todo!()
 }
+
+
 
 fn handle_config() -> Result<HashMap<String, String>, std::io::Error> {
     if !Path::new("server.properties").exists()

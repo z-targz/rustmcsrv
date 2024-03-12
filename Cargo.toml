@@ -9,6 +9,7 @@ edition = "2021"
 
 [dependencies]
 server_util = { path = "./server_util" }
+server_macros = { path = "./server_macros" }
 
 [dependencies.lazy_static]
 version = "1.4.0"

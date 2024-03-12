@@ -1,6 +1,12 @@
 use std::error::Error;
 use server_util::error::IterEndError;
 
+use futures::stream::Stream;
+use futures::stream::StreamExt;
+use futures::stream;
+
+pub type VarInt = i32;
+
 /// reads a [VarInt](https://wiki.vg/Protocol#Type:VarInt) from a `u8` iterator, returning an `i32`.
 /// 
 /// the bytes will be consumed from the iterator.
@@ -10,7 +16,7 @@ use server_util::error::IterEndError;
 /// # Arguments:
 /// * `iter:&mut impl Iterator<Item = u8>` - the iterator to read the bytes from
 /// 
-pub fn read_var_int(iter: &mut impl Iterator<Item = u8>) -> Result<i32, Box<dyn Error>> {
+pub fn read_var_int(iter: &mut impl Iterator<Item = u8>) -> Result<VarInt, Box<dyn Error>> {
     let mut out: i32 = 0;
     for i in 0..4 {
         let Some(val) = iter.next() else { return Err(IterEndError{})? };
@@ -20,6 +26,23 @@ pub fn read_var_int(iter: &mut impl Iterator<Item = u8>) -> Result<i32, Box<dyn 
         }
     }
     let Some(val) = iter.next() else { return Err(IterEndError{})? };
+    if (val) & 0x80 != 0 {
+        return Err("VarInt too large.")?
+    }
+    out += i32::from(val & 0x7f) << 7*4;
+    Ok(out)
+}
+pub async fn read_var_int_async(stream: &mut (impl Stream<Item = u8> + Unpin)) -> Result<i32, Box<dyn Error>> {
+    let mut out: i32 = 0;
+    let mut iter = Box::pin(stream);
+    for i in 0..4 {
+        let Some(val) =  iter.next().await else { return Err(IterEndError{})? } ;
+        out += i32::from(val & 0x7f) << 7*i;
+        if val & 0x80 == 0 {
+            return Ok(out);
+        }
+    }
+    let Some(val) = iter.next().await else { return Err(IterEndError{})? };
     if (val) & 0x80 != 0 {
         return Err("VarInt too large.")?
     }
@@ -82,9 +105,13 @@ pub fn read_double(iter: &mut impl Iterator<Item = u8>) -> Result<f64, Box<dyn E
 }
 
 pub fn read_ushort(iter: &mut impl Iterator<Item = u8>) -> Result<u16, Box<dyn Error>> {
-    let Some(byte1) = iter.next() else { return Err(IterEndError{})? };
-    let Some(byte2) = iter.next() else { return Err(IterEndError{})? };
-    Ok(u16::from_be_bytes([byte1, byte2]))
+    let array: [u8; 2] = std::convert::TryFrom::try_from(iter.take(2).collect::<Vec<u8>>().as_slice())?;
+    Ok(u16::from_be_bytes(array))
+}
+
+pub fn read_long(iter: &mut impl Iterator<Item = u8>) -> Result<i64, Box<dyn Error>> {
+    let array: [u8; 8] = std::convert::TryFrom::try_from(iter.take(8).collect::<Vec<u8>>().as_slice())?;
+    Ok(i64::from_be_bytes(array))
 }
 
 pub fn create_var_int(i: i32) -> Vec<u8> {
@@ -118,7 +145,7 @@ pub fn create_var_long(l: i64) -> Vec<u8> {
     out
 }
 
-pub fn create_string(s: String) -> Vec<u8> {
+pub fn create_string(s: &String) -> Vec<u8> {
     let raw = s.as_bytes().to_owned().into_iter();
     let len = create_var_int(raw.len() as i32).into_iter();
     len.chain(raw).collect()
@@ -134,6 +161,10 @@ pub fn create_double(d: f64) -> Vec<u8> {
 
 pub fn create_ushort(us: u16) -> Vec<u8> {
     us.to_be_bytes().to_vec()
+}
+
+pub fn create_long(l: i64) -> Vec<u8> {
+    l.to_be_bytes().to_vec()
 }
 
 #[cfg(test)]
@@ -347,7 +378,7 @@ mod tests {
     fn test_strings() {
         //test that encoding and decoding strings works
         let string1 = "Hello, World!".to_string();
-        let vector = create_string(string1.clone());
+        let vector = create_string(&string1);
         let string2 = read_string(&mut vector.into_iter()).unwrap();
         assert_eq!(string1, string2);
 
@@ -361,8 +392,8 @@ mod tests {
         //test that data following the string will not be read
         let string1 = "Hello, ".to_string();
         let string2 = "World!".to_string();
-        let bytes1 = create_string(string1.clone());
-        let bytes2 = create_string(string2);
+        let bytes1 = create_string(&string1);
+        let bytes2 = create_string(&string2);
 
         let mut bytes = bytes1.into_iter().chain(bytes2.into_iter());
         assert_eq!(read_string(&mut bytes).unwrap(), string1);

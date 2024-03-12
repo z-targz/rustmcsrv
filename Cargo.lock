@@ -650,9 +650,9 @@ checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.78"
+version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2422ad645d89c99f8f3e6b88a9fdeca7fabeac836b1002371c4367c8f984aae"
+checksum = "e835ff2298f5721608eb1a980ecaee1aef2c132bf95ecc026a11b7bf3c01c02e"
 dependencies = [
  "unicode-ident",
 ]
@@ -740,6 +740,7 @@ dependencies = [
  "async_executors",
  "futures",
  "lazy_static",
+ "server_macros",
  "server_util",
  "uuid",
 ]
@@ -751,8 +752,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92d43fe69e652f3df9bdc2b85b2854a0825b86e4fb76bc44d945137d053639ca"
 
 [[package]]
+name = "server_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "server_util",
+ "syn 2.0.52",
+]
+
+[[package]]
 name = "server_util"
 version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
 
 [[package]]
 name = "slab"
