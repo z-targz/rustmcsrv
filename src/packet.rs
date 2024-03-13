@@ -20,8 +20,36 @@ pub trait Serverbound: Packet {
 }
 
 pub enum SPacket {
-    SHandshake(handshake::SHandshake),
-    SStatusRequest(status::SStatusRequest),
-    SPingRequest_Status(status::SPingRequest_Status),
+    SHandshake(Box<handshake::SHandshake>),
+    SStatusRequest(Box<status::SStatusRequest>),
+    SPingRequest_Status(Box<status::SPingRequest_Status>),
+}
+
+pub enum CreatePacketError {
+    InvalidPacketIDError,
+    PacketCreateError,
+}
+
+
+pub fn create_packet(id: i32, state: ConnectionState, iter: &mut impl Iterator<Item = u8>) -> Result<SPacket, Box<dyn Error>> {
+    
+    match state {
+        ConnectionState::Handshake => match id {
+            0 => Ok(SPacket::SHandshake(handshake::SHandshake::parse(iter)?)),
+            _ => Err("Invalid ID")?
+        },
+        ConnectionState::Status => match id {
+            _ => Err("Invalid ID")?
+        },
+        ConnectionState::Login => match id {
+            _ => Err("Invalid ID")?
+        }
+        ConnectionState::Configuration => match id {
+            _ => Err("Invalid ID")?
+        }
+        ConnectionState::Play => match id {
+            _ => Err("Invalid ID")?
+        }
+    }
 }
 

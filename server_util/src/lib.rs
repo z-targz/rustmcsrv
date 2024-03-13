@@ -8,6 +8,7 @@ use quote::ToTokens;
 
 pub mod error;
 
+#[derive(Clone, Copy)]
 pub enum ConnectionState {
     Handshake,
     Status,

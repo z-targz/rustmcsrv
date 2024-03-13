@@ -68,14 +68,11 @@ async fn main() {
             Ok(stream) => {
                 let mut tcpstream = stream.0;
                 let _ = tcpstream.set_nodelay(true);
-                {
-                    
-                    let mut w = THE_SERVER.write().await;
-                    let n = w.add_connection(tcpstream);
-                    drop(w);
-                    let connection = handle_connection(n);
-                    threadpool.spawn(connection);
-                }
+                let mut server = THE_SERVER.write().await;
+                let n = server.add_connection(tcpstream);
+                drop(server);
+                let connection = handle_connection(n);
+                threadpool.spawn(connection);
             },
             Err(_) => return
         }
@@ -83,15 +80,16 @@ async fn main() {
 }
 
 pub async fn handle_connection(n: usize) {
-    let r = THE_SERVER.read().await;
-    let w = r.get_connections().get(n).unwrap();
-    let result = w.read_next_packet().await;
-    drop(r);
+    let server = THE_SERVER.read().await;
+    let connection = server.get_connections().get_by_id(n).unwrap(); //TODO: fix this
+    
+    let result = connection.read_next_packet().await;
+    drop(server);
     match result {
         Ok(s_packet) => {
             match s_packet {
                 packet::SPacket::SHandshake(packet) => {
-                    
+                    println!("Connection established: {}", )
                 }
                 _ => {
                     //Incorrect packet, close stream and clean up
