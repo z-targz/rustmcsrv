@@ -1,28 +1,34 @@
 use core::mem::drop;
 
+use std::arch::x86_64::_CMP_EQ_OS;
 use std::fs;
 use std::fs::{OpenOptions, File};
 use std::path::Path;
 use std::collections::HashMap;
 use std::io::{Write, BufReader};
 use std::net::{SocketAddr};
-use std::sync::RwLock;
+
 
 use futures::executor::{ThreadPool, ThreadPoolBuilder};
 use futures::task::FutureObj;
 use futures::future::Lazy;
 use futures::StreamExt;
 
-use async_std::net::{TcpListener, TcpStream};
+use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::RwLock;
 
 use lazy_static::lazy_static;
 
+use crate::packet::handshake::SHandshake;
 use crate::server::Server;
 use crate::server::Connection;
 
-mod player;
+mod protocol;
 mod server;
 mod packet;
+mod player;
+
+
 mod data;
 
 const MTU: usize = 1500;
@@ -35,18 +41,19 @@ const MAX_PLAYERS: usize = 32;
 
 
 lazy_static!{
-    pub static ref THE_SERVER: RwLock<Server> = RwLock::new(Server::new(MAX_PLAYERS));
+    pub static ref THE_SERVER: RwLock<Server<'static>> = RwLock::new(Server::new(MAX_PLAYERS));
 }
 
-#[async_std::main]
+#[tokio::main]
 async fn main() {
-    //let mut the_server = Server::new(MAX_PLAYERS);
+    let threadpool = tokio::runtime::Builder::new_multi_thread().build().unwrap();
+
 
     let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], PORT))).await.unwrap_or_else(|e| {
         eprintln!("Error: {e}");
         std::process::exit(1);
     });
-
+    
     /*let mut thread_pool_builder = ThreadPoolBuilder::new();
     thread_pool_builder.pool_size(TOTAL_THREADS - 3);
     let pool = thread_pool_builder.create().unwrap();*/
@@ -55,29 +62,44 @@ async fn main() {
     thread_pool_builder.pool_size(TOTAL_THREADS - 3);
     let pool = thread_pool_builder.create().unwrap();
 
-    listener.incoming().for_each_concurrent(None, |stream| async {
+    loop {
+        let stream = listener.accept().await;
         match stream {
-            Ok(tcpstream) => {
+            Ok(stream) => {
+                let tcpstream = stream.0;
+                let _ = tcpstream.set_nodelay(true);
                 {
-                    let _ = tcpstream.set_nodelay(true);
-                    let mut w = THE_SERVER.write().unwrap();
+                    let mut w = THE_SERVER.write().await;
                     let n = w.add_connection(tcpstream);
                     drop(w);
                     let connection = handle_connection(n);
-                    pool.spawn_ok(connection);
+                    threadpool.spawn(connection);
                 }
             },
             Err(_) => return
-        }  
-    }).await;
+        }
+    }
 }
 
 use std::error::Error;
 pub async fn handle_connection(n: usize) {
-    let r = THE_SERVER.read().unwrap();
-    let w = r.get_connections().get(n).unwrap().write().unwrap();
-    {
-        
+    let r = THE_SERVER.read().await;
+    let mut w = r.get_connections().get(n).unwrap().write().await;
+    let result = w.read_next_packet().await;
+    match result {
+        Ok(s_packet) => {
+            match s_packet {
+                packet::SPacket::SHandshake(packet) => {
+                    
+                }
+                _ => {
+                    //Incorrect packet, close stream and clean up
+                }
+            }
+        },
+        Err(_) => {
+            //Something went wrong, close stream and clean up
+        }
     }
     drop(w);
     drop(r);

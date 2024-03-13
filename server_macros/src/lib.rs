@@ -162,18 +162,26 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
         assign += format!("{field_name} : {field_name}, ").as_str();
 
 
-        let func = match field.ty.to_token_stream().to_string().as_str() {
-            "String" => "create_string(&",
-            "VarInt" => "create_var_int(",
-            "VarLong" => "create_var_long(",
-            "u16" => "create_ushort(",
-            "i64" => "create_long(",
-            "f32" => "create_float(",
-            "f64" => "create_double(",
+        let field_type = field.ty.to_token_stream().to_string();
+
+        let func = match field_type.as_str() {
+            "String" => "create_string",
+            "VarInt" => "create_var_int",
+            "VarLong" => "create_var_long",
+            "u16" => "create_ushort",
+            "i64" => "create_long",
+            "f32" => "create_float",
+            "f64" => "create_double",
             
             _ => panic!("Type not supported"),
         };
-        writes += format!("out.extend({func}self.{field_name}));", ).as_str();
+
+        let borrow = match field_type.as_str() {
+            "String" => "&",
+            _ => "",
+        };
+
+        writes += format!("out.extend({func}({borrow}self.{field_name}));", ).as_str();
     }
 
     let assign: proc_macro2::TokenStream = assign.parse().unwrap();
@@ -260,7 +268,7 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
     }
 
     /* 
-     * impl Serverbound
+     * impl Serverbound, Self
      */
 
     let fields = match &ast.data {
@@ -271,14 +279,14 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
 
     let mut field_names = String::new();
     let mut let_reads = String::new();
+    let mut getters = String::new();
     for field in &fields.named {
         let field_name = field.ident.to_token_stream().to_string();
         field_names += format!("{field_name} : {field_name}, ").as_str();
 
-        //let_reads += "let ";
-        //let_reads += field.to_token_stream().to_string().as_str();
-        //let_reads += " = ";
-        let func = match field.ty.to_token_stream().to_string().as_str() {
+        let field_type = field.ty.to_token_stream().to_string();
+
+        let func = match field_type.as_str() {
             "String" => "read_string",
             "VarInt" => "read_var_int",
             "VarLong" => "read_var_long",
@@ -289,12 +297,20 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
 
             _ => panic!("Type not supported"),
         };
-        //let_reads += "(iter)?;";
+        
         let_reads += format!("let {} = {func}(iter)?;", field.to_token_stream().to_string()).as_str();
+
+        let borrow = match field_type.as_str() {
+            "String" => "&",
+            _ => "",
+        };
+
+        getters += format!("pub fn get_{field_name}(&self) -> {borrow}{field_type} {{ {borrow}self.{field_name} }}").as_str();
     }
 
     let field_names: proc_macro2::TokenStream = field_names.parse().unwrap();
     let let_reads: proc_macro2::TokenStream = let_reads.parse().unwrap();
+    let getters: proc_macro2::TokenStream = getters.parse().unwrap();
 
     let gen = quote! {
         impl Packet for #name {
@@ -312,6 +328,9 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
                     #field_names
                 }))
             }
+        }
+        impl #name {
+            #getters
         }
     };
     gen.into()

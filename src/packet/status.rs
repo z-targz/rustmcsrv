@@ -12,26 +12,26 @@ use server_macros::SPacket;
 #[derive(CPacket)]
 #[state(Status)]
 #[id(0)]
-struct CStatusResponse {
+pub struct CStatusResponse {
     json_response: String,
 }
 
 #[derive(CPacket)]
 #[state(Status)]
 #[id(1)]
-struct CPingResponse_Status {
+pub struct CPingResponse_Status {
     payload: i64,
 }
 
 #[derive(SPacket)]
 #[state(Status)]
 #[id(0)]
-struct SStatusRequest { }
+pub struct SStatusRequest { }
 
 #[derive(SPacket)]
 #[state(Status)]
 #[id(1)]
-struct SPingRequest_Status {
+pub struct SPingRequest_Status {
     payload: i64,
 }
 

@@ -33,8 +33,10 @@ features = [
     "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
 ]
 
-[dependencies.async-std]
-version = "1.6"
-features = ["attributes"]
+#[dependencies.async-std]
+#version = "1.6"
+#features = ["attributes"]
 
-
+[dependencies.tokio]
+version = "1"
+features = ["full"]
