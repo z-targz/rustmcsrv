@@ -4,7 +4,7 @@ use crate::server::Connection;
 pub struct Player<'a> {
     name: String,
     uuid: Uuid,
-    connection: &'a Connection,
+    connection: &'a Connection<'a>,
     data: PlayerData,
     test: i32,
 }

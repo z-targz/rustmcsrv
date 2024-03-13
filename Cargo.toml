@@ -10,6 +10,7 @@ edition = "2021"
 [dependencies]
 server_util = { path = "./server_util" }
 server_macros = { path = "./server_macros" }
+async-stream = "0.3.5"
 
 [dependencies.lazy_static]
 version = "1.4.0"

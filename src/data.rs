@@ -32,7 +32,7 @@ pub fn read_var_int(iter: &mut impl Iterator<Item = u8>) -> Result<VarInt, Box<d
     out += i32::from(val & 0x7f) << 7*4;
     Ok(out)
 }
-pub async fn read_var_int_async(stream: &mut (impl Stream<Item = u8> + Unpin)) -> Result<i32, Box<dyn Error>> {
+pub async fn read_var_int_async(stream: impl Stream<Item = u8>) -> Result<i32, Box<dyn Error>> {
     let mut out: i32 = 0;
     let mut iter = Box::pin(stream);
     for i in 0..4 {
