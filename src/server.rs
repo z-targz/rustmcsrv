@@ -9,7 +9,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::error::Error;
 
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex, RwLock};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
@@ -25,6 +25,7 @@ use server_util::ConnectionState;
 //use crate::data::read_var_int_async;
 use crate::player::Player;
 use crate::packet;
+use crate::packet::Clientbound;
 use crate::data::{read_var_int, read_var_int_async};
 
 use async_stream::stream;
@@ -113,8 +114,12 @@ impl<'a> Connection<'a> {
         self.state = state;
     }
 
-    pub fn send_packet(&mut self, packet: impl packet::Clientbound) {
-        
+    pub async fn send_packet(&self, packet: impl Clientbound) -> Result<(), tokio::io::Error> {
+        let mut socket_w = self.write.lock().await;
+        match socket_w.write_all(packet.to_be_bytes().as_slice()).await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        }
     }
 
     pub async fn read_next_packet(&self) -> Result<packet::SPacket, Box<dyn Error + Send + Sync>> {
@@ -127,16 +132,16 @@ impl<'a> Connection<'a> {
             Err(_) => return Err(ConnectionError::ConnectionClosed)?,
             _ => ()
         }
-        //println!("Raw packet data (first 10): {:?}", buff);
+        println!("Raw packet data (first 10): {:?}", buff);
         
         let mut header_iter = buff.to_vec().into_iter();
 
         let packet_size_bytes = read_var_int(&mut header_iter)? as usize;
-        //println!("Packet size: {packet_size_bytes}");
+        println!("Packet size: {packet_size_bytes}");
 
         let header_size = 5 - header_iter.count();
 
-        //println!("Reading packet data...");
+        println!("Reading packet data...");
         let mut buf = Box::new(Vec::with_capacity(packet_size_bytes));
         buf.resize(header_size + packet_size_bytes, 0u8);
 
@@ -144,20 +149,20 @@ impl<'a> Connection<'a> {
             
             let Ok(bytes) = socket_ro.read_exact(buf.as_mut_slice()).await else {return Err(ConnectionError::ConnectionClosed)?};
         drop(socket_ro);
-        //println!("Read {bytes} bytes.");
+        println!("Read {bytes} bytes.");
         match bytes {
             0=> return Err(ConnectionError::ConnectionClosed)?,
             _=>()
         }
-        //println!("Packet data: {:?}.", buf);
+        println!("Packet data: {:?}.", buf);
 
         let mut iter = buf.into_iter();
         let _ = iter.advance_by(header_size); //This *might* be the cause of a bug in the future. Keep your eyes peeled.
 
         let packet_id = read_var_int(&mut iter)?;
-        //println!("Packet id: {packet_id}");
+        println!("Packet id: {packet_id}");
 
-        //println!("Creating packet...");
+        println!("Creating packet...");
         Ok(packet::create_packet(packet_id, self.state, &mut iter)?)
     }
 
@@ -191,7 +196,7 @@ impl<'a> Server<'static> {
         &self.connections
     }
 
-    pub fn get_players(&self) -> &'static Vec<Player> {
+    pub fn get_players(&self) -> &'a Vec<Player> {
         &self.players
     }
 

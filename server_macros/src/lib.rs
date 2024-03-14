@@ -181,7 +181,7 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
             _ => "",
         };
 
-        writes += format!("out.extend({func}({borrow}self.{field_name}));", ).as_str();
+        writes += format!("data.extend({func}({borrow}self.{field_name}));", ).as_str();
     }
 
     let assign: proc_macro2::TokenStream = assign.parse().unwrap();
@@ -200,14 +200,17 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
 
         impl Clientbound for #name {
             fn to_be_bytes(&self) -> Vec<u8> {
-                let mut out: Vec<u8> = Vec::new();
+                let mut data: Vec<u8> = Vec::new();
                 #writes
+                let mut out: Vec<u8> = create_var_int(data.len() as i32 + 1);
+                out.push(#id as u8);
+                out.append(&mut data);
                 out
             }
         }
 
         impl #name {
-            fn new(
+            pub fn new(
                 #fields_text
             ) -> Self {
                 #name {

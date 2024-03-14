@@ -25,6 +25,13 @@ pub enum SPacket {
     SPingRequest_Status(Box<status::SPingRequest_Status>),
 }
 
+pub enum CPacket {
+    CStatusResponse(Box<status::CStatusResponse>),
+    CPingResponse_Status(Box<status::CPingResponse_Status>),
+}
+
+
+
 pub enum CreatePacketError {
     InvalidPacketIDError,
     PacketCreateError,
@@ -39,6 +46,8 @@ pub fn create_packet(id: i32, state: ConnectionState, iter: &mut impl Iterator<I
             _ => Err("Invalid ID")?
         },
         ConnectionState::Status => match id {
+            0 => Ok(SPacket::SStatusRequest(status::SStatusRequest::parse(iter)?)),
+            1 => Ok(SPacket::SPingRequest_Status(status::SPingRequest_Status::parse(iter)?)),
             _ => Err("Invalid ID")?
         },
         ConnectionState::Login => match id {
