@@ -127,50 +127,16 @@ impl<'a> Connection<'a> {
             Err(_) => return Err(ConnectionError::ConnectionClosed)?,
             _ => ()
         }
-        println!("Raw packet data (first 10): {:?}", buff);
+        //println!("Raw packet data (first 10): {:?}", buff);
         
         let mut header_iter = buff.to_vec().into_iter();
 
         let packet_size_bytes = read_var_int(&mut header_iter)? as usize;
-        println!("Packet size: {packet_size_bytes}");
-
-        //let packet_id = read_var_int(&mut header_iter)?;
-        //println!("Packet id: {packet_id}");
+        //println!("Packet size: {packet_size_bytes}");
 
         let header_size = 5 - header_iter.count();
 
-        /*let reader = &self.read;
-
-        let packet_stream = stream! {
-            let mut the_byte: [u8;1] = [0u8];
-            let mut socket = reader.lock().await;
-            let bytes = socket.read(&mut the_byte).await;
-            drop(socket);
-            match bytes {
-                Ok(0) => (),
-                _ => {
-                    yield the_byte[0]
-                }
-            }
-            
-        };
-        let mut the_box = Box::pin(packet_stream);
-
-
-        panic!();
-        println!("Reading packet size...");
-
-        //let packet_size_bytes = read_var_int_async(&mut the_box).await? as usize;
-        let packet_size_bytes = packet_size_bytes as usize;
-        
-
-
-        println!("Reading packet id...");
-        let Ok(packet_id) = read_var_int_async(&mut the_box).await else {return Err(ConnectionError::ConnectionClosed)?};
-        */
-        
-
-        println!("Reading packet data...");
+        //println!("Reading packet data...");
         let mut buf = Box::new(Vec::with_capacity(packet_size_bytes));
         buf.resize(header_size + packet_size_bytes, 0u8);
 
@@ -178,20 +144,20 @@ impl<'a> Connection<'a> {
             
             let Ok(bytes) = socket_ro.read_exact(buf.as_mut_slice()).await else {return Err(ConnectionError::ConnectionClosed)?};
         drop(socket_ro);
-        println!("Read {bytes} bytes.");
+        //println!("Read {bytes} bytes.");
         match bytes {
             0=> return Err(ConnectionError::ConnectionClosed)?,
             _=>()
         }
-        println!("Packet data: {:?}.", buf);
+        //println!("Packet data: {:?}.", buf);
 
         let mut iter = buf.into_iter();
         let _ = iter.advance_by(header_size); //This *might* be the cause of a bug in the future. Keep your eyes peeled.
 
         let packet_id = read_var_int(&mut iter)?;
-        println!("Packet id: {packet_id}");
+        //println!("Packet id: {packet_id}");
 
-        println!("Creating packet...");
+        //println!("Creating packet...");
         Ok(packet::create_packet(packet_id, self.state, &mut iter)?)
     }
 
