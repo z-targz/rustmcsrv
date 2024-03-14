@@ -322,7 +322,7 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
             }
         }
         impl Serverbound for #name {
-            fn parse(iter: &mut impl Iterator<Item = u8>) -> Result<Box<#name>, Box<dyn Error>> {
+            fn parse(iter: &mut impl Iterator<Item = u8>) -> Result<Box<#name>, Box<dyn Error + Send + Sync>> {
                 #let_reads
                 Ok(Box::new(#name {
                     #field_names

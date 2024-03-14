@@ -16,7 +16,7 @@ pub trait Clientbound: Packet {
 }
 
 pub trait Serverbound: Packet {
-    fn parse(iter: &mut impl Iterator<Item = u8>) -> Result<Box<Self>, Box<dyn Error>> where Self: Sized;
+    fn parse(iter: &mut impl Iterator<Item = u8>) -> Result<Box<Self>, Box<dyn Error + Send + Sync>> where Self: Sized;
 }
 
 pub enum SPacket {
@@ -31,7 +31,7 @@ pub enum CreatePacketError {
 }
 
 
-pub fn create_packet(id: i32, state: ConnectionState, iter: &mut impl Iterator<Item = u8>) -> Result<SPacket, Box<dyn Error>> {
+pub fn create_packet(id: i32, state: ConnectionState, iter: &mut impl Iterator<Item = u8>) -> Result<SPacket, Box<dyn Error + Send + Sync>> {
     
     match state {
         ConnectionState::Handshake => match id {

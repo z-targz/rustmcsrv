@@ -1,8 +1,8 @@
 #![feature(coroutines)]
+#![feature(iter_advance_by)]
+
 use core::mem::drop;
 
-use std::arch::x86_64::_CMP_EQ_OS;
-use std::fs;
 use std::fs::{OpenOptions, File};
 use std::path::Path;
 use std::collections::HashMap;
@@ -11,19 +11,17 @@ use std::net::{SocketAddr};
 
 
 use futures::executor::{ThreadPool, ThreadPoolBuilder};
-use futures::task::FutureObj;
-use futures::future::Lazy;
-use futures::StreamExt;
 
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::RwLock;
 
 use lazy_static::lazy_static;
 
-use crate::packet::handshake::SHandshake;
-use crate::server::Server;
-use crate::server::Connection;
 
+use crate::server::Server;
+
+
+use server_util::ConnectionState;
 
 mod server;
 mod packet;
@@ -66,10 +64,11 @@ async fn main() {
         let stream = listener.accept().await;
         match stream {
             Ok(stream) => {
-                let mut tcpstream = stream.0;
+                let tcpstream = stream.0;
+                let addr = stream.1;
                 let _ = tcpstream.set_nodelay(true);
                 let mut server = THE_SERVER.write().await;
-                let n = server.add_connection(tcpstream);
+                let n = server.add_connection(tcpstream, addr);
                 drop(server);
                 let connection = handle_connection(n);
                 threadpool.spawn(connection);
@@ -81,15 +80,56 @@ async fn main() {
 
 pub async fn handle_connection(n: usize) {
     let server = THE_SERVER.read().await;
-    let connection = server.get_connections().get_by_id(n).unwrap(); //TODO: fix this
-    
+    let connection = server.get_connection_by_id(n).unwrap(); //TODO: fix this
+    let addr = connection.get_addr();
     let result = connection.read_next_packet().await;
-    drop(server);
+
+    println!("Connection established: {}", addr);
     match result {
         Ok(s_packet) => {
             match s_packet {
                 packet::SPacket::SHandshake(packet) => {
-                    println!("Connection established: {}", )
+                    println!("Handshake Successful!");
+                    println!("Protocol Version: {}", packet.get_protocol_version());
+                    println!("Hostname used to connect: {}", packet.get_server_address());
+                    println!("Port used to connect: {}", packet.get_server_port());
+                    match packet.get_next_state()
+                    {
+                        1 => {
+                            let mut mut_server = THE_SERVER.write().await;
+                            match mut_server.set_connection_state_by_id(n, ConnectionState::Status) {
+                                Ok(_) => (),
+                                Err(_) => {
+                                    //Connection not found
+                                    return;
+                                }
+                            }
+                            drop(mut_server);
+                            println!("Next State: Status(1)");
+                        }
+                        2 => {
+                            let mut server = THE_SERVER.write().await;
+                            match server.set_connection_state_by_id(n, ConnectionState::Status) {
+                                Ok(_) => (),
+                                Err(_) => {
+                                    //Connection not found
+                                    return;
+                                }
+                            }
+                            drop(server);
+                            println!("Next State: Login(1)");
+                        }
+                        
+                        _ => {
+                            //Incorrect packet, close stream and clean up
+                            let mut server = THE_SERVER.write().await;
+                            server.drop_connection_by_id(n);
+                            drop(server);
+                            return
+                        }
+                    }
+                    
+                    
                 }
                 _ => {
                     //Incorrect packet, close stream and clean up
@@ -100,9 +140,6 @@ pub async fn handle_connection(n: usize) {
             //Something went wrong, close stream and clean up
         }
     }
-    
-    
-    todo!()
 }
 
 

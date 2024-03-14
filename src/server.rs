@@ -1,3 +1,5 @@
+use core::net::SocketAddr;
+
 
 use std::collections::HashMap;
 use std::cmp::min;
@@ -9,10 +11,14 @@ use std::error::Error;
 
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::io::BufReader;
+
 use uuid::Uuid;
 
+use futures::StreamExt;
+use tokio::stream;
 
 use server_util::ConnectionState;
 
@@ -34,8 +40,8 @@ impl<'a> Connections<'a> {
     pub fn new(max_players: usize) -> Self {
         Connections { connections : HashMap::with_capacity(max_players * 2), idx : 0 }
     }
-    pub fn add(&mut self, tcpstream: TcpStream) -> usize {
-        self.connections.insert(self.idx, Connection::new(tcpstream));
+    pub fn add(&mut self, tcpstream: TcpStream, addr: SocketAddr) -> usize {
+        self.connections.insert(self.idx, Connection::new(tcpstream, addr));
         self.idx += 1;
         self.idx-1
     }
@@ -45,10 +51,29 @@ impl<'a> Connections<'a> {
             None => Err(ConnectionError::ConnectionClosed)
         }
     }
+
+    pub fn get_mut_by_id(&mut self, id: usize) -> Result<&'a mut Connection, ConnectionError> {
+        match self.connections.get_mut(&id) {
+            Some(connection) => Ok(connection),
+            None => Err(ConnectionError::ConnectionClosed)
+        }
+    }
+
+    pub fn set_connection_state_by_id(&mut self, id: usize, state: ConnectionState) -> Result<(), ConnectionError> {
+        match self.connections.get_mut(&id) {
+            Some(connection) => connection.set_connection_state(state),
+            None => return Err(ConnectionError::ConnectionClosed)
+        }
+        Ok(())
+    }
+
+    pub fn drop_by_id(&mut self, id:usize) {
+        self.connections.remove(&id);
+    }
 }
 
 #[derive(Debug)]
-enum ConnectionError {
+pub enum ConnectionError {
     ConnectionClosed,
     PacketCreateError(String),
 }
@@ -70,44 +95,103 @@ pub struct Connection<'a> {
     read: Mutex<OwnedReadHalf>,
     write: Mutex<OwnedWriteHalf>,
     state: ConnectionState,
-    addr: SocketAddrV4,
+    addr: SocketAddr,
     player: Option<&'a Player<'a>>,
 }
 
 impl<'a> Connection<'a> {
-    pub fn new(stream: TcpStream) -> Self {
+    pub fn new(stream: TcpStream, addr: SocketAddr) -> Self {
         let (read, write) = stream.into_split();
-        Connection {read : Mutex::new(read), write : Mutex::new(write),  state: ConnectionState::Handshake, player: None }
+        Connection {read : Mutex::new(read), write : Mutex::new(write),  state : ConnectionState::Handshake, addr : addr, player : None}
+    }
+
+    pub fn get_addr(&self) -> SocketAddr {
+        self.addr
+    }
+
+    pub fn set_connection_state(&mut self, state: ConnectionState) {
+        self.state = state;
     }
 
     pub fn send_packet(&mut self, packet: impl packet::Clientbound) {
         
     }
 
-    pub async fn read_next_packet(&self) -> Result<packet::SPacket, Box<dyn Error>> {
-        //let mut iter = PacketLengthIterator{reader: &mut self.read};
-
-        let reader = &self.read;
-        let packet_stream = stream! {
-            let mut socket_ro = reader.blocking_lock();
-            match socket_ro.read_u8().await {
-                Ok(val) => yield val,
-                Err(_) =>()
-            }
-        };
+    pub async fn read_next_packet(&self) -> Result<packet::SPacket, Box<dyn Error + Send + Sync>> {
+        let mut buff: [u8; 5] = [0u8; 5];
+        let mut socket_ro_peek = self.read.lock().await;
+        let num_bytes = socket_ro_peek.peek(&mut buff).await;
+        drop(socket_ro_peek);
+        match num_bytes {
+            Ok(0) => return Err(ConnectionError::ConnectionClosed)?,
+            Err(_) => return Err(ConnectionError::ConnectionClosed)?,
+            _ => ()
+        }
+        println!("Raw packet data (first 10): {:?}", buff);
         
-        let Ok(packet_size_bytes) = read_var_int_async(Box::pin(packet_stream)).await else {return Err(ConnectionError::ConnectionClosed)?};
+        let mut header_iter = buff.to_vec().into_iter();
+
+        let packet_size_bytes = read_var_int(&mut header_iter)? as usize;
+        println!("Packet size: {packet_size_bytes}");
+
+        //let packet_id = read_var_int(&mut header_iter)?;
+        //println!("Packet id: {packet_id}");
+
+        let header_size = 5 - header_iter.count();
+
+        /*let reader = &self.read;
+
+        let packet_stream = stream! {
+            let mut the_byte: [u8;1] = [0u8];
+            let mut socket = reader.lock().await;
+            let bytes = socket.read(&mut the_byte).await;
+            drop(socket);
+            match bytes {
+                Ok(0) => (),
+                _ => {
+                    yield the_byte[0]
+                }
+            }
+            
+        };
+        let mut the_box = Box::pin(packet_stream);
+
+
+        panic!();
+        println!("Reading packet size...");
+
+        //let packet_size_bytes = read_var_int_async(&mut the_box).await? as usize;
         let packet_size_bytes = packet_size_bytes as usize;
-        let mut buf = Vec::with_capacity(packet_size_bytes);
-        let mut socket_ro = self.read.blocking_lock();
-            let Ok(bytes) = socket_ro.read_exact(&mut buf).await else {return Err(ConnectionError::ConnectionClosed)?};
+        
+
+
+        println!("Reading packet id...");
+        let Ok(packet_id) = read_var_int_async(&mut the_box).await else {return Err(ConnectionError::ConnectionClosed)?};
+        */
+        
+
+        println!("Reading packet data...");
+        let mut buf = Box::new(Vec::with_capacity(packet_size_bytes));
+        buf.resize(header_size + packet_size_bytes, 0u8);
+
+        let mut socket_ro = self.read.lock().await;
+            
+            let Ok(bytes) = socket_ro.read_exact(buf.as_mut_slice()).await else {return Err(ConnectionError::ConnectionClosed)?};
         drop(socket_ro);
+        println!("Read {bytes} bytes.");
         match bytes {
             0=> return Err(ConnectionError::ConnectionClosed)?,
             _=>()
         }
+        println!("Packet data: {:?}.", buf);
+
         let mut iter = buf.into_iter();
-        let Ok(packet_id) = read_var_int(&mut iter) else {return Err(ConnectionError::ConnectionClosed)?};
+        let _ = iter.advance_by(header_size); //This *might* be the cause of a bug in the future. Keep your eyes peeled.
+
+        let packet_id = read_var_int(&mut iter)?;
+        println!("Packet id: {packet_id}");
+
+        println!("Creating packet...");
         Ok(packet::create_packet(packet_id, self.state, &mut iter)?)
     }
 
@@ -133,15 +217,27 @@ impl<'a> Server<'static> {
         }
     }
 
-    pub fn add_connection(&mut self, tcpstream: TcpStream) -> usize {
-        self.connections.add(tcpstream)
+    pub fn add_connection(&mut self, tcpstream: TcpStream, addr: SocketAddr) -> usize {
+        self.connections.add(tcpstream, addr)
     }
 
-    pub fn get_connections(&self) -> &Connections {
+    fn get_connections(&self) -> &Connections {
         &self.connections
     }
 
     pub fn get_players(&self) -> &'static Vec<Player> {
         &self.players
+    }
+
+    pub fn get_connection_by_id(&self, id: usize) -> Result<&'a Connection, ConnectionError> {
+        self.connections.get_by_id(id)
+    }
+
+    pub fn set_connection_state_by_id(&mut self, id: usize, state: ConnectionState) -> Result<(), ConnectionError> {
+        self.connections.set_connection_state_by_id(id, state)
+    }
+
+    pub fn drop_connection_by_id(&mut self, id:usize) {
+        self.connections.drop_by_id(id);
     }
 }

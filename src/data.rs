@@ -1,4 +1,6 @@
 use std::error::Error;
+use std::pin::Pin;
+
 use server_util::error::IterEndError;
 
 use futures::stream::Stream;
@@ -16,7 +18,7 @@ pub type VarInt = i32;
 /// # Arguments:
 /// * `iter:&mut impl Iterator<Item = u8>` - the iterator to read the bytes from
 /// 
-pub fn read_var_int(iter: &mut impl Iterator<Item = u8>) -> Result<VarInt, Box<dyn Error>> {
+pub fn read_var_int(iter: &mut impl Iterator<Item = u8>) -> Result<VarInt, Box<dyn Error + Send + Sync>> {
     let mut out: i32 = 0;
     for i in 0..4 {
         let Some(val) = iter.next() else { return Err(IterEndError{})? };
@@ -32,21 +34,21 @@ pub fn read_var_int(iter: &mut impl Iterator<Item = u8>) -> Result<VarInt, Box<d
     out += i32::from(val & 0x7f) << 7*4;
     Ok(out)
 }
-pub async fn read_var_int_async(stream: impl Stream<Item = u8>) -> Result<i32, Box<dyn Error>> {
+pub async fn read_var_int_async(stream: &mut Pin<Box<impl Stream<Item = u8>>>) -> Result<i32, Box<dyn Error + Send + Sync>> {
     let mut out: i32 = 0;
-    let mut iter = Box::pin(stream);
     for i in 0..4 {
-        let Some(val) =  iter.next().await else { return Err(IterEndError{})? } ;
+        let Some(val) =  stream.next().await else { return Err(IterEndError{})? } ;
         out += i32::from(val & 0x7f) << 7*i;
         if val & 0x80 == 0 {
             return Ok(out);
         }
     }
-    let Some(val) = iter.next().await else { return Err(IterEndError{})? };
+    let Some(val) = stream.next().await else { return Err(IterEndError{})? };
     if (val) & 0x80 != 0 {
         return Err("VarInt too large.")?
     }
     out += i32::from(val & 0x7f) << 7*4;
+    
     Ok(out)
 }
 
@@ -59,7 +61,7 @@ pub async fn read_var_int_async(stream: impl Stream<Item = u8>) -> Result<i32, B
 /// # Arguments:
 /// * `iter:&mut impl Iterator<Item = u8>` - the iterator to read the bytes from
 ///
-pub fn read_var_long(iter: &mut impl Iterator<Item = u8>) -> Result<i64, Box<dyn Error>> {
+pub fn read_var_long(iter: &mut impl Iterator<Item = u8>) -> Result<i64, Box<dyn Error + Send + Sync>> {
     let mut out: i64 = 0;
     for i in 0..9 {
         let Some(val) = iter.next() else { return Err(IterEndError{})? };
@@ -76,7 +78,7 @@ pub fn read_var_long(iter: &mut impl Iterator<Item = u8>) -> Result<i64, Box<dyn
     Ok(out)
 }
 
-pub fn read_string(iter: &mut impl Iterator<Item = u8>) -> Result<String, Box<dyn Error>> {
+pub fn read_string(iter: &mut impl Iterator<Item = u8>) -> Result<String, Box<dyn Error + Send + Sync>> {
     let len = read_var_int(iter)? as usize;
     let raw = iter.take(len).collect::<Vec<u8>>();
     if raw.len() < len {
@@ -86,7 +88,7 @@ pub fn read_string(iter: &mut impl Iterator<Item = u8>) -> Result<String, Box<dy
         
 }
 
-pub fn read_float(iter: &mut impl Iterator<Item = u8>) -> Result<f32, Box<dyn Error>> {
+pub fn read_float(iter: &mut impl Iterator<Item = u8>) -> Result<f32, Box<dyn Error + Send + Sync>> {
     //TODO: replace with take_forced(4)
     let bytes = iter.take(4).collect::<Vec<u8>>();
     if bytes.len() < 4 {
@@ -95,7 +97,7 @@ pub fn read_float(iter: &mut impl Iterator<Item = u8>) -> Result<f32, Box<dyn Er
     Ok(f32::from_be_bytes(bytes.try_into().unwrap()))
 }
 
-pub fn read_double(iter: &mut impl Iterator<Item = u8>) -> Result<f64, Box<dyn Error>> {
+pub fn read_double(iter: &mut impl Iterator<Item = u8>) -> Result<f64, Box<dyn Error + Send + Sync>> {
     //TODO: replace with take_forced(4)
     let bytes = iter.take(8).collect::<Vec<u8>>();
     if bytes.len() < 8 {
@@ -104,12 +106,12 @@ pub fn read_double(iter: &mut impl Iterator<Item = u8>) -> Result<f64, Box<dyn E
     Ok(f64::from_be_bytes(bytes.try_into().unwrap()))
 }
 
-pub fn read_ushort(iter: &mut impl Iterator<Item = u8>) -> Result<u16, Box<dyn Error>> {
+pub fn read_ushort(iter: &mut impl Iterator<Item = u8>) -> Result<u16, Box<dyn Error + Send + Sync>> {
     let array: [u8; 2] = std::convert::TryFrom::try_from(iter.take(2).collect::<Vec<u8>>().as_slice())?;
     Ok(u16::from_be_bytes(array))
 }
 
-pub fn read_long(iter: &mut impl Iterator<Item = u8>) -> Result<i64, Box<dyn Error>> {
+pub fn read_long(iter: &mut impl Iterator<Item = u8>) -> Result<i64, Box<dyn Error + Send + Sync>> {
     let array: [u8; 8] = std::convert::TryFrom::try_from(iter.take(8).collect::<Vec<u8>>().as_slice())?;
     Ok(i64::from_be_bytes(array))
 }
