@@ -51,14 +51,6 @@ async fn main() {
         eprintln!("Error: {e}");
         std::process::exit(1);
     });
-    
-    /*let mut thread_pool_builder = ThreadPoolBuilder::new();
-    thread_pool_builder.pool_size(TOTAL_THREADS - 3);
-    let pool = thread_pool_builder.create().unwrap();*/
-    
-    //let mut thread_pool_builder = async_executors::ThreadPool::builder();
-    //thread_pool_builder.pool_size(TOTAL_THREADS - 3);
-    //let pool = thread_pool_builder.create().unwrap();
 
     loop {
         let stream = listener.accept().await;
