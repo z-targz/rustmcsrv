@@ -1,10 +1,9 @@
 use std::error::Error;
-use crate::data::read_var_int;
 use server_util::ConnectionState;
-use server_util::error::IterEndError;
 
 pub mod handshake;
 pub mod status;
+pub mod login;
 
 pub trait Packet: Sized { 
     fn get_id(&self) -> i32 where Self: Sized;
@@ -19,45 +18,70 @@ pub trait Serverbound: Packet {
     fn parse(iter: &mut impl Iterator<Item = u8>) -> Result<Box<Self>, Box<dyn Error + Send + Sync>> where Self: Sized;
 }
 
-pub enum SPacket {
-    SHandshake(Box<handshake::SHandshake>),
-    SStatusRequest(Box<status::SStatusRequest>),
-    SPingRequest_Status(Box<status::SPingRequest_Status>),
-}
 
+#[allow(non_camel_case_types)]
 pub enum CPacket {
     CStatusResponse(Box<status::CStatusResponse>),
     CPingResponse_Status(Box<status::CPingResponse_Status>),
 }
 
-
-
-pub enum CreatePacketError {
-    InvalidPacketIDError,
-    PacketCreateError,
+#[allow(non_camel_case_types)]
+pub enum SPacket {
+    SHandshake(Box<handshake::SHandshake>),
+    SStatusRequest(Box<status::SStatusRequest>),
+    SPingRequest_Status(Box<status::SPingRequest_Status>),
+    SLoginStart(Box<login::SLoginStart>),
 }
 
 
-pub fn create_packet(id: i32, state: ConnectionState, iter: &mut impl Iterator<Item = u8>) -> Result<SPacket, Box<dyn Error + Send + Sync>> {
+#[derive(Debug)]
+pub enum CreatePacketError {
+    InvalidPacketIDError,
+    PacketCreateError(String),
+}
+
+impl Error for CreatePacketError {}
+
+impl std::fmt::Display for CreatePacketError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let err_str = match self {
+            CreatePacketError::InvalidPacketIDError => "Invalid Packet ID".to_string(),
+            CreatePacketError::PacketCreateError(s) => format!("{}",s),
+        };
+        write!(f, "CreatePacketError: {err_str}")
+    }
+}
+
+
+impl From<Box<dyn Error + Send + Sync>> for CreatePacketError {
+    fn from(value: Box<dyn Error + Send + Sync>) -> Self {
+        CreatePacketError::PacketCreateError(value.to_string())
+    }
+}
+
+
+
+pub fn create_packet(id: i32, state: ConnectionState, iter: &mut impl Iterator<Item = u8>) -> Result<SPacket, CreatePacketError> {
     
     match state {
         ConnectionState::Handshake => match id {
             0 => Ok(SPacket::SHandshake(handshake::SHandshake::parse(iter)?)),
-            _ => Err("Invalid ID")?
+            _ => Err(CreatePacketError::InvalidPacketIDError),
         },
         ConnectionState::Status => match id {
             0 => Ok(SPacket::SStatusRequest(status::SStatusRequest::parse(iter)?)),
             1 => Ok(SPacket::SPingRequest_Status(status::SPingRequest_Status::parse(iter)?)),
-            _ => Err("Invalid ID")?
+            _ => Err(CreatePacketError::InvalidPacketIDError),
         },
         ConnectionState::Login => match id {
-            _ => Err("Invalid ID")?
+            0 => Ok(SPacket::SLoginStart(login::SLoginStart::parse(iter)?)),
+            _ => Err(CreatePacketError::InvalidPacketIDError),
         }
         ConnectionState::Configuration => match id {
-            _ => Err("Invalid ID")?
+            _ => Err(CreatePacketError::InvalidPacketIDError),
         }
         ConnectionState::Play => match id {
-            _ => Err("Invalid ID")?
+            _ => Err(CreatePacketError::InvalidPacketIDError),
         }
     }
 }

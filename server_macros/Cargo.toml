@@ -10,7 +10,9 @@ proc-macro = true
 quote = "1.0"
 proc-macro2 = "1.0"
 server_util = { path = "../server_util" }
+base64 = "0.22.0"
 
 [dependencies.syn]
 version = "2.0"
 features = ["parsing"]
+

@@ -13,12 +13,13 @@ use server_macros::SPacket;
 #[state(Status)]
 #[id(0)]
 pub struct CStatusResponse {
-    json_response: String,
+    json_response: JSON,
 }
 
 #[derive(CPacket)]
 #[state(Status)]
 #[id(1)]
+#[allow(non_camel_case_types)]
 pub struct CPingResponse_Status {
     payload: i64,
 }
@@ -31,6 +32,7 @@ pub struct SStatusRequest { }
 #[derive(SPacket)]
 #[state(Status)]
 #[id(1)]
+#[allow(non_camel_case_types)]
 pub struct SPingRequest_Status {
     payload: i64,
 }

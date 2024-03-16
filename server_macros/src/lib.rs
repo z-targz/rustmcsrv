@@ -1,4 +1,4 @@
-//#![feature(proc_macro_span)]
+#![feature(proc_macro_span)]
 
 extern crate proc_macro;
 
@@ -11,8 +11,12 @@ use syn::MetaList;
 use syn::Data;
 use syn::DataStruct;
 use syn::Fields;
+use syn::parse_macro_input;
+use syn::LitStr;
 
 use server_util::ConnectionState;
+
+use base64::prelude::*;
 
 
 #[proc_macro_derive(PacketHandshake)]
@@ -134,9 +138,6 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
                 "Configuration" => {state = ConnectionState::Configuration},
                 _ => panic!("{msg}"),
             }
-
-        } else {
-            panic!("Invalid attributes for Derive(Packet).");
         }
     }
     /* 
@@ -166,18 +167,26 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
 
         let func = match field_type.as_str() {
             "String" => "create_string",
+            "JSON" => "create_string",
             "VarInt" => "create_var_int",
             "VarLong" => "create_var_long",
+            "bool" => "create_bool",
             "u16" => "create_ushort",
+            "Uuid" => "create_uuid",
             "i64" => "create_long",
             "f32" => "create_float",
             "f64" => "create_double",
             
+            "PrefixedByteArray" => "create_prefixed_byte_array",
+            "InferredByteArray" => "create_inferred_byte_array",
             _ => panic!("Type not supported"),
         };
 
         let borrow = match field_type.as_str() {
             "String" => "&",
+            "JSON" => "&",
+            "PrefixedByteArray" => "&",
+            "InferredByteArray" => "&",
             _ => "",
         };
 
@@ -264,9 +273,6 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
                 "Configuration" => {state = ConnectionState::Configuration},
                 _ => panic!("{msg}"),
             };
-
-        } else {
-            panic!("Invalid attributes for Derive(Packet).");
         }
     }
 
@@ -289,26 +295,54 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
 
         let field_type = field.ty.to_token_stream().to_string();
 
-        let func = match field_type.as_str() {
-            "String" => "read_string",
-            "VarInt" => "read_var_int",
-            "VarLong" => "read_var_long",
-            "u16" => "read_ushort",
-            "i64" => "read_long",
-            "f32" => "read_float",
-            "f64" => "read_double",
+        let func: &str;
+        let func_string;
 
-            _ => panic!("Type not supported"),
-        };
+        //borrow variable-sized types
+        fn borrow(str: &str) -> &str {
+            match str {
+                "String" => "&",
+                "PrefixedByteArray" => "&",
+                "InferredByteArray" => "&",
+                _ => "",
+            }
+        }
+
+        if field_type.starts_with("Option") {
+            let option_type = extract_T_from_option(&field_type);
+
+            func_string = format!("read_option");
+            func = func_string.as_str();
+            
+            let b = borrow(option_type.as_str());
+            getters += format!("pub fn get_{field_name}(&self) -> Option<{b}{option_type}> {{ self.{field_name}{} }}", if b == "&" {".as_ref()"} else {""}).as_str();
+
+            let_reads += format!("let {field_name}: Option<{option_type}> = {func}(iter)?;").as_str();
+        } else {
+            func = match field_type.as_str() {
+                "String" => "read_string",
+                "JSON" => "read_string",
+                "VarInt" => "read_var_int",
+                "VarLong" => "read_var_long",
+                "bool" => "read_bool",
+                "u16" => "read_ushort",
+                "Uuid" => "read_uuid",
+                "i64" => "read_long",
+                "f32" => "read_float",
+                "f64" => "read_double",
+    
+                "PrefixedByteArray" => "read_prefixed_byte_array",
+                "InferredByteArray" => "read_inferred_byte_array",
+                _ => panic!("Type not supported: {field_type}"),
+            };
+
+            let b = borrow(field_type.as_str());
+            getters += format!("pub fn get_{field_name}(&self) -> {b}{field_type} {{ {b}self.{field_name} }}").as_str();
+
+            let_reads += format!("let {field_name}: {field_type} = {func}(iter)?;").as_str();
+        }
+
         
-        let_reads += format!("let {} = {func}(iter)?;", field.to_token_stream().to_string()).as_str();
-
-        let borrow = match field_type.as_str() {
-            "String" => "&",
-            _ => "",
-        };
-
-        getters += format!("pub fn get_{field_name}(&self) -> {borrow}{field_type} {{ {borrow}self.{field_name} }}").as_str();
     }
 
     let field_names: proc_macro2::TokenStream = field_names.parse().unwrap();
@@ -337,4 +371,47 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
         }
     };
     gen.into()
+}
+
+#[allow(non_snake_case)]
+fn extract_T_from_option(string: &String) -> String {
+    let s = remove_whitespace(string);
+    s[7..s.len()-1].to_string()
+}
+
+fn remove_whitespace(string: &String) -> String {
+    let mut s = string.clone();
+    s.retain(|c| !c.is_whitespace());
+    s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn extract_option() {
+        let string = "Option < Meme >".to_string();
+        assert_eq!(extract_T_from_option(&string), "Meme".to_string());
+    }
+}
+
+
+
+#[proc_macro]
+pub fn base64_image(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as LitStr);
+    let path = input.value();
+    
+    let data = std::fs::read(&path);
+    match data {
+        Ok(vec) => {
+            let mut base64_string = String::new();
+            BASE64_STANDARD.encode_string(vec, &mut base64_string);
+            quote!{ Ok(#base64_string) }.into()
+        }
+        Err(_) => {
+            quote!{ Err(std::io::Error::from(std::io::ErrorKind::NotFound))}.into()
+        }
+    }
+    
 }

@@ -1,63 +1,61 @@
 #![feature(coroutines)]
 #![feature(iter_advance_by)]
+#![feature(non_null_convenience)]
 
 #[macro_use]
 extern crate serde_json;
-
-
-use core::mem::drop;
 
 use std::fs::{OpenOptions, File};
 use std::path::Path;
 use std::collections::HashMap;
 use std::io::{Write, BufReader};
-use std::net::{SocketAddr};
+use std::net::SocketAddr;
 
+use tokio::net::TcpListener;
 
-use futures::executor::{ThreadPool, ThreadPoolBuilder};
-
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::RwLock;
 
 use lazy_static::lazy_static;
 
+use base64::prelude::*;
+use tokio::runtime::Runtime;
+
 use crate::packet::status::{CPingResponse_Status, CStatusResponse};
 use crate::server::Server;
-use crate::server::Connection;
+use crate::connection::Connection;
+use crate::player::Player;
 
-use packet::{SPacket};
+use packet::SPacket;
 
 use server_util::ConnectionState;
 
-mod server;
-mod packet;
 mod player;
-
-
+mod connection;
+mod server;
 mod data;
+mod packet;
 
-const MTU: usize = 1500;
+//const MTU: usize = 1500;
 
 //TODO: Read these from server.properties
 const PORT: u16 = 25565;
-const TOTAL_THREADS: usize = 12;
-const MOTD: &str = "A Minecraft Server (Made with Rust!)";
+//const TOTAL_THREADS: usize = 12;
+
 const MAX_PLAYERS: usize = 32;
 
 lazy_static!{
-    pub static ref THE_SERVER: RwLock<Server<'static>> = RwLock::new(Server::new(MAX_PLAYERS));
+    pub static ref MOTD: String = "A Minecraft Server (§cMade with Rust!§r)".to_string();
+    pub static ref THE_SERVER: Server = Server::new(MAX_PLAYERS, &MOTD);
+    pub static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread().build().unwrap();
 }
+
 
 #[tokio::main]
 async fn main() {
-    let threadpool = tokio::runtime::Builder::new_multi_thread().worker_threads(TOTAL_THREADS - 3).build().unwrap();
-
 
     let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], PORT))).await.unwrap_or_else(|e| {
         eprintln!("Error: {e}");
         std::process::exit(1);
     });
-
     loop {
         let stream = listener.accept().await;
         match stream {
@@ -65,82 +63,59 @@ async fn main() {
                 let tcpstream = stream.0;
                 let addr = stream.1;
                 let _ = tcpstream.set_nodelay(true);
-                let mut server = THE_SERVER.write().await;
-                let id = server.add_connection(tcpstream, addr);
-                drop(server);
-                let connection = handle_connection(id);
-                threadpool.spawn(connection);
+                let connection = Connection::new(tcpstream, addr);
+                let future = handshake_state(connection);
+                RUNTIME.spawn(future);
             },
             Err(_) => return
         }
     }
 }
-
-/// Helper function
+/// ## Handshake State
 /// 
-/// Drops the connection with the given `Connection ID` (see `server::Connections`)
+/// Wait for a single packet `SHandshake` and transition to appropriate state `Status` or `Login`
 /// 
-async fn drop_by_id(id: usize) {
-    let mut server = THE_SERVER.write().await;
-    server.drop_connection_by_id(id);
-    drop(server);
-}
-
-async fn handle_connection(id: usize) {
-    let server = THE_SERVER.read().await;
-    let connection = server.get_connection_by_id(id).unwrap(); //TODO: make this better
+async fn handshake_state(connection: Connection) {
     let addr = connection.get_addr();
     let result = connection.read_next_packet().await;
-    drop(server);
     println!("Connection established: {}", addr);
     match result {
         Ok(s_packet) => {
             match s_packet {
                 SPacket::SHandshake(packet) => {
-                    println!("Handshake Successful!");
-                    println!("Protocol Version: {}", packet.get_protocol_version());
-                    println!("Hostname used to connect: {}", packet.get_server_address());
-                    println!("Port used to connect: {}", packet.get_server_port());
+                    println!("{addr} > Handshake Successful!");
+                    println!("{addr} > Protocol Version: {}", packet.get_protocol_version());
+                    println!("{addr} > Hostname used to connect: {}", packet.get_server_address());
+                    println!("{addr} > Port used to connect: {}", packet.get_server_port());
                     match packet.get_next_state()
                     {
                         1 => {
-                            
-                            let mut mut_server = THE_SERVER.write().await;
-                            if mut_server.set_connection_state_by_id(id, ConnectionState::Status).is_err() {
-                                //Connection not found
-                                println!("Connection not found...");
-                                return;
-                            }
-                            drop(mut_server);
-                            println!("Next State: Status(1)");
-                            status_state(id).await;
+                            connection.set_connection_state(ConnectionState::Status).await;
+                            println!("{addr} > Next State: Status(1)");
+                            status_state(connection).await;
                         }
                         2 => {
-                            let mut mut_server = THE_SERVER.write().await;
-                            if mut_server.set_connection_state_by_id(id, ConnectionState::Login).is_err() {
-                                //Connection not found
-                                println!("Connection not found...");
-                                return;
-                            }
-                            drop(mut_server);
-                            println!("Next State: Login(1)");
-
+                            connection.set_connection_state(ConnectionState::Login).await;
+                            println!("{addr} > Next State: Login(1)");
+                            login_state(connection).await;
                         }
-                        
                         _ => {
-                            //Incorrect packet, close stream and clean up
-                            drop_by_id(id).await;
+                            //Invalid login state. 
+                            //This will never happen with a vanilla client unless something goes terribly wrong.
+                            connection.drop().await;
                             return
                         }
                     }
                 }
                 _ => {
-                    drop_by_id(id).await;
+                    //Incorrect packet
+                    connection.drop().await;
                 }
             }
         },
         Err(_) => {
-            drop_by_id(id).await;
+            //Error reading packet
+            connection.drop().await;
         }
     }
 }
@@ -154,76 +129,47 @@ async fn handle_connection(id: usize) {
 /// 
 /// __S -> C__ &nbsp; : &nbsp; SPingResponse_Status
 /// 
-async fn status_state(id: usize) {
-    
-    let server = THE_SERVER.read().await;
-    let connection = server.get_connection_by_id(id).unwrap(); //TODO: make this better
-    
-    //Listen for SStatusRequest
-    println!("Listening for SStatusRequest...");
+async fn status_state(connection: Connection) {
+    let addr = connection.get_addr();
+    /*
+        Listen for SStatusRequest
+    */
+    println!("{addr} > Listening for SStatusRequest...");
     match connection.read_next_packet().await {
         Ok(s_packet) => {
             match s_packet {
                 SPacket::SStatusRequest(_) => (),
                 _ => {
-                    println!("Incorrect packet...");
-                    drop_by_id(id).await;
+                    println!("{addr} > Incorrect packet...");
+                    connection.drop().await;
                     return;
                 }
             }
         },
         Err(_) => {
-            drop_by_id(id).await;
+            connection.drop().await;
         }
     }
-    drop(server);
+    println!("{addr} > Received SStatusRequest!");
 
-    println!("Received SStatusRequest!");
-
-    println!("Sending CStatusResponse...!");
-
-    //Send CStatusResponse
-    let server = THE_SERVER.read().await;
-    let connection = server.get_connection_by_id(id).unwrap(); //TODO: make this better
-    let online_players = server.get_players();
-    let c_status_response = CStatusResponse::new(json!(
-        {
-            "version": {
-                "name": "1.20.1",
-                "protocol": 763
-            },
-            "players": {
-                "max": MAX_PLAYERS as i32,
-                "online": online_players.len(),
-                "sample": [] //TODO: make the sample
-            },
-            "description": {
-                "text": MOTD
-            },
-            //TODO: "favicon": "data:image/png;base64,<data>" //where <data> is the base64 encoding of the image
-            "enforceSecureChat": false,
-            //"previewsChat": false
-        }
-    ).to_string());
-    
-    println!("Constructed JSON");
-
-    match connection.send_packet(c_status_response).await {
+    /*
+        Send CStatusResponse
+     */
+    println!("{addr} > Sending CStatusResponse...");
+    match connection.send_packet(generate_status_response().await).await {
         Ok(_) => (),
         Err(_) => {
-            println!("Error sending packet!");
-            drop_by_id(id).await;
+            println!("{addr} > Error sending packet!");
+            connection.drop().await;
             return;
         }
     };
-    drop(server);
-    println!("Sent CStatusResponse.");
+    println!("{addr} > Sent CStatusResponse.");
 
-
-    //Listen for SPingRequest_Status
+    /*
+        Listen for SPingRequest_Status
+     */
     let payload: i64;
-    let server = THE_SERVER.read().await;
-    let connection = server.get_connection_by_id(id).unwrap(); //TODO: make this better
     match connection.read_next_packet().await {
         Ok(s_packet) => {
             match s_packet {
@@ -231,38 +177,122 @@ async fn status_state(id: usize) {
                     payload = s_ping_request_status.get_payload();
                 },
                 _ => {
-                    println!("Incorrect packet");
-                    //Incorrect packet, close stream and clean up
-                    drop_by_id(id).await;
+                    //Incorrect packet
+                    println!("{addr} > Incorrect packet");
+                    connection.drop().await;
                     return;
                 }
             }
         },
         Err(_) => {
-            drop_by_id(id).await;
+            connection.drop().await;
             return;
         }
     }
-    println!("Received SPingRequest_Status!");
-    drop(server);
+    println!("{addr} > Received SPingRequest_Status!");
 
-    //Send SPingResponse_Status
-    let server = THE_SERVER.read().await;
-    let connection = server.get_connection_by_id(id).unwrap(); //TODO: make this better
+    /*
+        Send SPingResponse_Status
+    */
     match connection.send_packet(CPingResponse_Status::new(payload)).await {
         Ok(_) => (),
         Err(_) => {
-            drop_by_id(id).await;
+            println!("{addr} > Unable to send packet SPingResponse_Status");
+            connection.drop().await;
             return;
         }
     };
-    drop(server);
 
-    drop_by_id(id).await;
-    println!("Connection Closed.");
+    connection.drop().await;
+    println!("Connection Closed: {addr}.");
     return;
-    
+}
 
+async fn generate_status_response() -> CStatusResponse {
+    let player_count = THE_SERVER.get_players_iter().count();
+    let max_players = THE_SERVER.get_max_players();
+    let motd = THE_SERVER.get_motd().clone();
+
+    let mut result = String::new();
+    let data = std::fs::read(Path::new("server-icon.png"));
+    match data {
+        Ok(vec) => {
+            BASE64_STANDARD.encode_string(vec, &mut result);
+        }
+        Err(_) => {
+            let r: Result<&str, std::io::Error> = server_macros::base64_image!("favicon.png");
+            result = r.unwrap().to_string();
+        }
+    }
+    let favicon_str = format!("data:image/png;base64,{}", result);
+    CStatusResponse::new(json!({
+        "version": {
+            "name": "1.20.1",
+            "protocol": 765
+        },
+        "players": {
+            "max": max_players as i32,
+            "online": player_count,
+            "sample": [] //TODO: make the sample
+        },
+        "description": {
+            "text": motd
+        },
+        "favicon": favicon_str,
+        "enforceSecureChat": false,
+        //"previewsChat": false
+    }).to_string())
+}
+
+/// ## Login Sequence:
+/// 
+/// __C -> S__ &nbsp; : &nbsp; SLoginStart
+/// 
+/// __S -> C__ &nbsp; : &nbsp; CEncryptionRequest //TODO: Not required for offline mode
+/// 
+/// __C -> S__ &nbsp; : &nbsp; SEncryptionResponse //Only if we sent the above packet
+/// 
+/// __Server auth step__ //TODO:
+/// 
+/// __S -> C__ CSetCompression //Optional
+/// 
+/// __S -> C__ CLoginSuccess
+/// 
+/// __C -> S__ SLoginAcknowledged
+/// 
+async fn login_state(connection: Connection) {
+    /*
+        Listen for SLoginStart
+    */
+    println!("Listening for SLoginStart...");
+    match connection.read_next_packet().await {
+        Ok(s_packet) => {
+            match s_packet {
+                SPacket::SLoginStart(packet) => {
+                    let player_name = packet.get_name().clone();
+
+                    #[warn(TEMPORARY)]
+                    let player_uuid = packet.get_uuid(); //TODO: DO NOT RELY ON THIS VALUE! GENERATE THE UUID OURSELVES!
+
+                    let player = Player::new(player_name, player_uuid, connection).await;
+                    println!("Registering player...");    
+
+                    let _player_id = THE_SERVER.register_player(player).await;
+
+                    println!("Registered player!");              
+                },
+                _ => {
+                    println!("Incorrect packet...");
+                    connection.drop().await;
+                    return;
+                }
+            }
+        },
+        Err(_) => {
+            connection.drop().await;
+            return;
+        }
+    }
 }
 
 fn handle_config() -> Result<HashMap<String, String>, std::io::Error> {
