@@ -24,6 +24,7 @@ impl Server {
     }
 
     pub async fn register_player(&self, player: Arc<Player>) -> usize {
+        player.get_connection().set_owner(player.clone()).await;
         self.players.add(player).await
     }
 

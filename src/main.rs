@@ -274,7 +274,7 @@ async fn login_state(connection: Connection) {
                     #[warn(TEMPORARY)]
                     let player_uuid = packet.get_uuid(); //TODO: DO NOT RELY ON THIS VALUE! GENERATE THE UUID OURSELVES!
 
-                    let player = Player::new(player_name, player_uuid, connection).await;
+                    let player = Player::new(player_name, player_uuid, connection);
                     println!("Registering player...");    
 
                     let _player_id = THE_SERVER.register_player(player).await;

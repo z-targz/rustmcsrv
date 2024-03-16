@@ -36,17 +36,19 @@ pub struct Player {
 }
 
 impl<'a> Player {
-    pub async fn new(name: String, uuid: Uuid, mut connection: Connection) -> Arc<Self> {
-        let mut player = Player { 
+    pub fn new(name: String, uuid: Uuid, connection: Connection) -> Arc<Self> {
+        let player = Player { 
             id : usize::MAX, //temp value is changed quickly
             name : name, 
             uuid : uuid, 
             connection : connection,
             data : RwLock::new(None),
         };
-        let arc = Arc::new(player);
-        arc.set_connection_owner(arc.clone()).await;
-        arc
+        Arc::new(player)
+    }
+
+    pub fn get_connection(&self) -> &Connection {
+        &self.connection
     }
 
     async fn set_connection_owner(&self, arc: Arc<Player>) -> Arc<Player> {
