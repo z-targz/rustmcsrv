@@ -179,6 +179,7 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
             
             "PrefixedByteArray" => "create_prefixed_byte_array",
             "InferredByteArray" => "create_inferred_byte_array",
+            "PropertyArray" => "create_property_array",
             _ => panic!("Type not supported"),
         };
 
@@ -187,6 +188,7 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
             "JSON" => "&",
             "PrefixedByteArray" => "&",
             "InferredByteArray" => "&",
+            "PropertyArray" => "&",
             _ => "",
         };
 
@@ -304,6 +306,7 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
                 "String" => "&",
                 "PrefixedByteArray" => "&",
                 "InferredByteArray" => "&",
+                "PropertyArray" => "&",
                 _ => "",
             }
         }
@@ -333,6 +336,7 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
     
                 "PrefixedByteArray" => "read_prefixed_byte_array",
                 "InferredByteArray" => "read_inferred_byte_array",
+                "PropertyArray" => "read_property_array",
                 _ => panic!("Type not supported: {field_type}"),
             };
 
@@ -341,8 +345,6 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
 
             let_reads += format!("let {field_name}: {field_type} = {func}(iter)?;").as_str();
         }
-
-        
     }
 
     let field_names: proc_macro2::TokenStream = field_names.parse().unwrap();
@@ -395,8 +397,6 @@ mod tests {
     }
 }
 
-
-
 #[proc_macro]
 pub fn base64_image(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as LitStr);
@@ -413,5 +413,4 @@ pub fn base64_image(input: TokenStream) -> TokenStream {
             quote!{ Err(std::io::Error::from(std::io::ErrorKind::NotFound))}.into()
         }
     }
-    
 }

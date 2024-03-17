@@ -1,10 +1,10 @@
 use std::sync::Arc;
+use std::sync::Weak;
 
 use uuid::Uuid;
 
-use crate::player::{Player, Players};
-
-
+use crate::player::Player;
+use crate::player::Players;
 
 pub struct Server {
     //const
@@ -23,8 +23,7 @@ impl Server {
         }
     }
 
-    pub async fn register_player(&self, player: Arc<Player>) -> usize {
-        player.get_connection().set_owner(player.clone()).await;
+    pub async fn register_player(&self, player: Player) -> Arc<Player> {
         self.players.add(player).await
     }
 
@@ -36,26 +35,25 @@ impl Server {
         &self.motd
     }
 
-    pub fn get_players_iter(&self) -> impl Iterator<Item = Arc<Player>> + '_ {
+    pub fn get_players_iter(&self) -> impl Iterator<Item = Weak<Player>> + '_ {
         self.players.players_iter()
     }
 
-    pub fn get_player_by_id(&self, id: usize) -> Option<Arc<Player>> {
+    pub fn get_player_by_id(&self, id: usize) -> Option<Weak<Player>> {
         self.players.get_by_id(id)
     }
 
-    pub fn get_player_by_uuid(&self, uuid: Uuid) -> Option<Arc<Player>> {
+    pub fn get_player_by_uuid(&self, uuid: Uuid) -> Option<Weak<Player>> {
         self.players.get_by_uuid(uuid)
     }
 
-    pub fn get_player_by_name(&self, name: &String) -> Option<Arc<Player>> {
+    pub fn get_player_by_name(&self, name: &String) -> Option<Weak<Player>> {
         self.players.get_by_name(name)
     }
 
     pub fn drop_player_by_id(&self, id: usize) {
-        self.players.drop_by_idx(id);
+        self.players.drop_by_id(id);
     }
-
 
     pub fn drop_player_by_uuid(&self, uuid: Uuid) {
         self.players.drop_by_uuid(uuid);

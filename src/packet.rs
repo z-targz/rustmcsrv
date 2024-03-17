@@ -31,8 +31,8 @@ pub enum SPacket {
     SStatusRequest(Box<status::SStatusRequest>),
     SPingRequest_Status(Box<status::SPingRequest_Status>),
     SLoginStart(Box<login::SLoginStart>),
+    SLoginAcknowledged(Box<login::SLoginAcknowledged>),
 }
-
 
 #[derive(Debug)]
 pub enum CreatePacketError {
@@ -52,14 +52,11 @@ impl std::fmt::Display for CreatePacketError {
     }
 }
 
-
 impl From<Box<dyn Error + Send + Sync>> for CreatePacketError {
     fn from(value: Box<dyn Error + Send + Sync>) -> Self {
         CreatePacketError::PacketCreateError(value.to_string())
     }
 }
-
-
 
 pub fn create_packet(id: i32, state: ConnectionState, iter: &mut impl Iterator<Item = u8>) -> Result<SPacket, CreatePacketError> {
     

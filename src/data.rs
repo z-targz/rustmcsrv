@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::pin::Pin;
 
+use serde::{Serialize, Deserialize};
 use server_util::error::IterEndError;
 
 use futures::stream::Stream;
@@ -22,12 +23,24 @@ pub struct InferredByteArray {
     bytes: Vec<u8>,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct Property {
     name: String,
     value: String,
-    is_signed: bool,
     signature: Option<String>,
 }
+
+impl Property {
+    pub fn new(name: String, value: String, signature: Option<String>) -> Self {
+        Property {
+            name : name,
+            value : value,
+            signature : signature, 
+        }
+    }
+}
+
+pub type PropertyArray = Vec<Property>;
 
 /// Reads a [VarInt](https://wiki.vg/Protocol#Type:VarInt) from a `u8` iterator, returning an `i32`.
 /// 
@@ -116,6 +129,23 @@ pub fn read_prefixed_byte_array(iter: &mut impl Iterator<Item = u8>) -> Result<P
         Err(IterEndError{})?
     }
     Ok(PrefixedByteArray{bytes : raw})
+}
+
+pub fn read_property_array(iter: &mut impl Iterator<Item = u8>) -> Result<PropertyArray, Box<dyn Error + Send + Sync>> {
+    let len: VarInt = read_var_int(iter)?;
+    let mut out: Vec<Property> = Vec::with_capacity(len as usize);
+    for _ in 0..len {
+        out.push(Property {
+            name : read_string(iter)?,
+            value: read_string(iter)?,
+            signature : if read_bool(iter)? {
+                Some(read_string(iter)?)
+            } else {
+                None
+            },
+        })
+    }
+    Ok(out)
 }
 
 pub fn read_inferred_byte_array(iter: &mut impl Iterator<Item = u8>) -> Result<InferredByteArray, Box<dyn Error + Send + Sync>> {
@@ -209,6 +239,30 @@ pub fn create_inferred_byte_array(array: &InferredByteArray) -> Vec<u8> {
     array.bytes.clone()
 }
 
+pub fn create_property(property: &Property) -> Vec<u8> {
+    let mut out: Vec<u8> = Vec::new();
+    out.append(&mut create_string(&property.name));
+    out.append(&mut create_string(&property.value));
+    match &property.signature {
+        Some(sig_ref) => {
+            out.append(&mut create_bool(true));
+            out.append(&mut create_string(sig_ref));
+        },
+        None => out.append(&mut create_bool(false)),
+    }
+    out
+}
+
+pub fn create_property_array(array: &PropertyArray) -> Vec<u8> {
+    let mut out: Vec<u8> = Vec::new();
+    let len = array.len();
+    out.append(&mut create_var_int(len as i32));
+    for i in 0..len {
+        out.append(&mut create_property(array.get(i).unwrap()));
+    }
+    out
+}
+
 pub fn create_float(f: f32) -> Vec<u8> {
     f.to_be_bytes().to_vec()
 }
@@ -288,7 +342,7 @@ where
 {
     if option.is_some() {
         let mut out = vec![1u8];
-        out.extend(T::create_func(option.unwrap()).into_iter());
+        out.append(&mut T::create_func(option.unwrap()));
         out
     } else {
         vec![0u8]

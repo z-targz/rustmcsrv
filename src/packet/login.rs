@@ -32,11 +32,7 @@ pub struct CEncryptionRequest {
 pub struct CLoginSuccess {
     uuid: Uuid,
     username: String,
-    zero_properties: VarInt,
-    /*
-        TODO: Figure out what the properties are and implement them as a Vec<Property>
-        where the byte representation is the property fields prefixed by a VarInt
-    */
+    properties: PropertyArray,
 }
 
 #[derive(CPacket)]

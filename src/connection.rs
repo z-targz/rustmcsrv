@@ -8,15 +8,18 @@ use tokio::net::TcpStream;
 use tokio::sync::{Mutex, RwLock};
 
 use server_util::ConnectionState;
+use tokio::time::error::Elapsed;
+use tokio::time::timeout;
 
 use crate::packet::{self, Clientbound, CreatePacketError};
-use crate::data::*;
+use crate::{data::*, TIMEOUT};
 use crate::player::Player;
 
 #[derive(Debug)]
 pub enum ConnectionError {
     ConnectionClosed,
     PacketCreateError(String),
+    Timeout,
     Other(String),
 }
 
@@ -25,8 +28,9 @@ impl Error for ConnectionError {}
 impl std::fmt::Display for ConnectionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let err_type = match self {
-            ConnectionError::ConnectionClosed => {"Connection Closed".to_string()}
-            ConnectionError::PacketCreateError(s) => {format!("Error Creating Packet ({s})")}
+            ConnectionError::ConnectionClosed => {"Connection Closed.".to_string()}
+            ConnectionError::PacketCreateError(s) => {format!("Error Creating Packet ({s}).")}
+            ConnectionError::Timeout => {"Timed out.".to_string()}
             ConnectionError::Other(s) => {format!("({s})")}
         };
         write!(f, "ConnectionError: {err_type}.")
@@ -42,6 +46,12 @@ impl From<Box<dyn Error + Send + Sync>> for ConnectionError {
 impl From<CreatePacketError> for ConnectionError {
     fn from(value: CreatePacketError) -> Self {
         ConnectionError::PacketCreateError(value.to_string())
+    }
+}
+
+impl From<Elapsed> for ConnectionError {
+    fn from(_: Elapsed) -> Self {
+        ConnectionError::Timeout
     }
 }
 
@@ -112,7 +122,7 @@ impl Connection {
 
     pub async fn read_next_packet(&self) -> Result<packet::SPacket, ConnectionError> {
         let mut buff: [u8; 5] = [0u8; 5];
-        let mut socket_ro_peek = self.read.lock().await;
+        let mut socket_ro_peek = timeout(TIMEOUT, self.read.lock()).await?;
         let num_bytes = socket_ro_peek.peek(&mut buff).await;
         drop(socket_ro_peek);
         match num_bytes {
@@ -134,8 +144,7 @@ impl Connection {
         buf.resize(header_size + packet_size_bytes, 0u8);
 
         let mut socket_ro = self.read.lock().await;
-            
-            let Ok(bytes) = socket_ro.read_exact(buf.as_mut_slice()).await else {return Err(ConnectionError::ConnectionClosed)?};
+            let Ok(bytes) = timeout(TIMEOUT, socket_ro.read_exact(buf.as_mut_slice())).await? else {return Err(ConnectionError::ConnectionClosed)?};
         drop(socket_ro);
         println!("Read {bytes} bytes.");
         match bytes {
@@ -160,16 +169,16 @@ impl Connection {
 
 impl Drop for Connection {
     fn drop(&mut self) {
-        println!("Dropping connection...");
-        if self.owner.get_mut().is_some() {
-            match self.owner.get_mut().as_ref().unwrap().upgrade() {
+        match self.owner.get_mut() {
+            Some(owner) => match owner.upgrade() {
                 Some(parent) => {
-                    crate::THE_SERVER.drop_player_by_uuid(parent.get_uuid());
+                    crate::THE_SERVER.drop_player_by_id(parent.get_id());
                     let name = parent.get_name();
                     println!("Dropped player: {name}");
                 },
                 None => ()
-            }
+            },
+            None =>()
         }
     }
 }
