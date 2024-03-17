@@ -113,7 +113,7 @@ pub(in crate::state) async fn login_state(connection: Connection) {
             return;
         }
     };
-    configuration_state(player_ref);
+    configuration_state(player_ref).await;
 }
 
 #[derive(Deserialize)]

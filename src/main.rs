@@ -5,39 +5,23 @@
 #[macro_use]
 extern crate serde_json;
 
-
-
-use std::error::Error;
 use std::fs::{OpenOptions, File};
 use std::path::Path;
 use std::collections::HashMap;
 use std::io::{Write, BufReader};
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Duration;
 
-use state::handshake_state::handshake_state;
+
 use tokio::runtime::Runtime;
 use tokio::net::TcpListener;
 
 use lazy_static::lazy_static;
 
-use base64::prelude::*;
-use tokio::time::timeout;
-use uuid::Uuid;
-use serde::{Serialize, Deserialize};
-use md5;
-
-use crate::data::{Property, PropertyArray};
-use crate::packet::login::*;
-use crate::packet::status::*;
 use crate::server::Server;
 use crate::connection::Connection;
-use crate::player::Player;
-
-use packet::SPacket;
-
-use server_util::ConnectionState;
+use crate::packet::SPacket;
+use crate::state::handshake_state::handshake_state;
 
 mod player;
 mod connection;
