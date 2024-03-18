@@ -10,7 +10,7 @@ use super::login_state::login_state;
 /// 
 /// Wait for a single packet `SHandshake` and transition to appropriate state `Status` or `Login`
 /// 
-pub(in crate) async fn handshake_state(connection: Connection) {
+pub(in crate) async fn handshake_state(mut connection: Connection) {
     let addr = connection.get_addr();
     let result = connection.read_next_packet().await;
     println!("Connection established: {}", addr);
@@ -37,20 +37,22 @@ pub(in crate) async fn handshake_state(connection: Connection) {
                         _ => {
                             //Invalid login state. 
                             //This will never happen with a vanilla client unless something goes terribly wrong.
-                            connection.drop().await;
-                            return
+                            connection.drop();
+                            return;
                         }
                     }
                 }
                 _ => {
                     //Incorrect packet
-                    connection.drop().await;
+                    connection.drop();
+                    return;
                 }
             }
         },
         Err(_) => {
             //Error reading packet
-            connection.drop().await;
+            connection.drop();
+            return;
         }
     }
 }

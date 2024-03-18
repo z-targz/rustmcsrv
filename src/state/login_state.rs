@@ -5,6 +5,7 @@ use tokio::time::timeout;
 use uuid::Uuid;
 use serde::Deserialize;
 
+use crate::data::CJSONTextComponent;
 use crate::data::Property;
 use crate::data::PropertyArray;
 use crate::player::Player;
@@ -33,7 +34,7 @@ use crate::TIMEOUT;
 /// 
 /// __C -> S__ SLoginAcknowledged
 /// 
-pub(in crate::state) async fn login_state(connection: Connection) {
+pub(in crate::state) async fn login_state(mut connection: Connection) {
     let addr = connection.get_addr();
     /*
         Listen for SLoginStart
@@ -48,12 +49,13 @@ pub(in crate::state) async fn login_state(connection: Connection) {
                     let player_name = packet.get_name().clone();
 
                     let player_uuid;
+
                     match get_player_uuid(&player_name).await {
                         Ok(uuid) => player_uuid = uuid,
                         Err(_) => {
                             RUNTIME.spawn(async move {
                                 //TODO: move the timeout into the send packet function
-                                let _ = connection.send_packet(CDisconnect::new("Mojang API appears to be down :(".to_string())).await;
+                                let _ = connection.send_packet(CDisconnect_Login::new(CJSONTextComponent::from_str("§4Mojang API appears to be down :("))).await;
                             });
                             return;
                         }
@@ -61,7 +63,7 @@ pub(in crate::state) async fn login_state(connection: Connection) {
 
                     match THE_SERVER.get_player_by_name(&player_name) {
                         //TODO: If this returns an error somehow, temp ipban for 30s
-                        Some(p) => p.upgrade().unwrap().disconnect(&"Logged in from another location.".to_string()).await,
+                        Some(p) => p.upgrade().unwrap().disconnect("Logged in from another location.").await,
                         None => (),
                     }
 
@@ -76,18 +78,19 @@ pub(in crate::state) async fn login_state(connection: Connection) {
                 },
                 _ => {
                     println!("Incorrect packet.");
-                    connection.drop().await;
+                    connection.drop();
                     return;
                 }
             }
         },
         Err(_) => {
-            connection.drop().await;
+            connection.drop();
             return;
         }
     }
     //TODO: Everything in between
 
+    println!("Sending CLoginSuccess...");
     match player_ref.send_packet(CLoginSuccess::new(
         player_ref.get_uuid(), 
         player_ref.get_name().clone(), 
@@ -99,7 +102,8 @@ pub(in crate::state) async fn login_state(connection: Connection) {
             return;
         }
     }
-
+    println!("Sent CLoginSuccess!");
+    println!("Awaiting SLoginAcknowledged...");
     match player_ref.read_next_packet().await {
         Ok(s_packet) => match s_packet {
             SPacket::SLoginAcknowledged(_) => (),
@@ -113,6 +117,8 @@ pub(in crate::state) async fn login_state(connection: Connection) {
             return;
         }
     };
+    println!("Received SLoginAcknowledged!");
+    println!("Switching to configuration state...");
     configuration_state(player_ref).await;
 }
 

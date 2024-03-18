@@ -4,6 +4,7 @@ use server_util::ConnectionState;
 pub mod handshake;
 pub mod status;
 pub mod login;
+pub mod configuration;
 
 pub trait Packet: Sized { 
     fn get_id(&self) -> i32 where Self: Sized;
@@ -18,12 +19,12 @@ pub trait Serverbound: Packet {
     fn parse(iter: &mut impl Iterator<Item = u8>) -> Result<Box<Self>, Box<dyn Error + Send + Sync>> where Self: Sized;
 }
 
-
+/*
 #[allow(non_camel_case_types)]
 pub enum CPacket {
     CStatusResponse(Box<status::CStatusResponse>),
     CPingResponse_Status(Box<status::CPingResponse_Status>),
-}
+}*/
 
 #[allow(non_camel_case_types)]
 pub enum SPacket {
@@ -58,8 +59,9 @@ impl From<Box<dyn Error + Send + Sync>> for CreatePacketError {
     }
 }
 
+
 pub fn create_packet(id: i32, state: ConnectionState, iter: &mut impl Iterator<Item = u8>) -> Result<SPacket, CreatePacketError> {
-    
+    //TODO: Replace this with a macro!
     match state {
         ConnectionState::Handshake => match id {
             0 => Ok(SPacket::SHandshake(handshake::SHandshake::parse(iter)?)),
@@ -72,6 +74,7 @@ pub fn create_packet(id: i32, state: ConnectionState, iter: &mut impl Iterator<I
         },
         ConnectionState::Login => match id {
             0 => Ok(SPacket::SLoginStart(login::SLoginStart::parse(iter)?)),
+            3 => Ok(SPacket::SLoginAcknowledged(login::SLoginAcknowledged::parse(iter)?)),
             _ => Err(CreatePacketError::InvalidPacketIDError),
         }
         ConnectionState::Configuration => match id {

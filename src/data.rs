@@ -2,6 +2,7 @@ use std::error::Error;
 use std::pin::Pin;
 
 use serde::{Serialize, Deserialize};
+use server_macros::json_text_component;
 use server_util::error::IterEndError;
 
 use futures::stream::Stream;
@@ -12,6 +13,9 @@ use uuid::Uuid;
 pub type VarInt = i32;
 
 pub type JSON = String;
+
+pub mod registry;
+pub mod nbt;
 
 ///A byte array prefixed by its length as a VarInt
 pub struct PrefixedByteArray {
@@ -37,6 +41,120 @@ impl Property {
             value : value,
             signature : signature, 
         }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+
+pub struct CJSONTextComponent {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    text: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    translatable: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    keybind: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    color: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bold: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    italic: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    underlined: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    strikethrough: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    obfuscated: Option<bool>,
+}
+
+impl CJSONTextComponent {
+    pub fn new(
+            text: Option<String>, 
+            translatable: Option<String>, 
+            keybind: Option<String>, 
+            color: Option<String>, 
+            bold: Option<bool>,
+            italic: Option<bool>,
+            underlined: Option<bool>,
+            strikethrough: Option<bool>,
+            obfuscated: Option<bool>,
+        ) -> Self {
+        CJSONTextComponent {
+            text : text,
+            translatable : translatable,
+            keybind : keybind,
+            color : color,
+            bold : bold,
+            italic : italic,
+            underlined : underlined,
+            strikethrough : strikethrough,
+            obfuscated : obfuscated,
+        }
+    }
+
+    pub fn from_str(the_str: &str) -> Self {
+        CJSONTextComponent::new(
+            Some(the_str.to_string()), 
+            None, 
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+    }
+
+    pub fn from_string(the_string: &String) -> Self {
+        CJSONTextComponent::new(
+            Some(the_string.clone()), 
+            None, 
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+    }
+
+    pub fn color(mut self, hex_code: u8) -> Self {
+        assert!(hex_code <= 0xf);
+        let color = match hex_code {
+            0x0 => "black",
+            0x1 => "dark_blue",
+            0x2 => "dark_green",
+            0x3 => "dark_aqua",
+            0x4 => "dark_red",
+            0x5 => "dark_purple",
+            0x6 => "gold",
+            0x7 => "gray",
+            0x8 => "dark_gray",
+            0x9 => "blue",
+            0xa => "green",
+            0xb => "aqua",
+            0xc => "red",
+            0xd => "light_purple",
+            0xe => "yellow",
+            0xf => "white",
+            _ => panic!("cosmic rays"),
+        };
+        self.color = Some(color.to_string());
+        self
+    }
+
+    pub fn to_string(&self) -> String {
+        serde_json::to_string(self).unwrap()
     }
 }
 
@@ -170,6 +288,13 @@ pub fn read_double(iter: &mut impl Iterator<Item = u8>) -> Result<f64, Box<dyn E
     Ok(f64::from_be_bytes(bytes.try_into().unwrap()))
 }
 
+pub fn read_ubyte(iter: &mut impl Iterator<Item = u8>) -> Result<u8, Box<dyn Error + Send + Sync>> {
+    match iter.next() {
+        Some(ubyte) => Ok(ubyte),
+        None => Err(IterEndError{})?,
+    }
+}
+
 pub fn read_bool(iter: &mut impl Iterator<Item = u8>) -> Result<bool, Box<dyn Error + Send + Sync>> {
     let Some(value) = iter.next() else { return Err(IterEndError{})? };
     match value {
@@ -231,6 +356,10 @@ pub fn create_string(s: &String) -> Vec<u8> {
     len.chain(raw).collect()
 }
 
+pub fn create_json_text_component(json_text_component: &CJSONTextComponent) -> Vec<u8> {
+    create_string(&serde_json::to_string(json_text_component).unwrap())
+}
+
 pub fn create_prefixed_byte_array(array: &PrefixedByteArray) -> Vec<u8> {
     create_var_int(array.bytes.len() as i32).into_iter().chain(array.bytes.clone().into_iter()).collect()
 }
@@ -278,8 +407,24 @@ pub fn create_bool(b: bool) -> Vec<u8> {
     }
 }
 
+pub fn create_byte(b: i8) -> Vec<u8> {
+    vec![b as u8]
+}
+
+pub fn create_ubyte(ub: u8) -> Vec<u8> {
+    vec![ub]
+}
+
+pub fn create_short(s: i16) -> Vec<u8> {
+    s.to_be_bytes().to_vec()
+}
+
 pub fn create_ushort(us: u16) -> Vec<u8> {
     us.to_be_bytes().to_vec()
+}
+
+pub fn create_int(i: i32) -> Vec<u8> {
+    i.to_be_bytes().to_vec()
 }
 
 pub fn create_long(l: i64) -> Vec<u8> {
@@ -312,12 +457,22 @@ impl Optional<VarInt> for VarInt {
 impl Optional<InferredByteArray> for InferredByteArray {
     #[inline]
     fn read_func(iter: &mut impl Iterator<Item = u8>) -> Result<InferredByteArray, Box<dyn Error + Send + Sync>> {
-
         read_inferred_byte_array(iter)
     }
     #[inline]
     fn create_func(data: InferredByteArray) -> Vec<u8> {
         create_inferred_byte_array(&data)
+    }
+}
+
+impl Optional<Uuid> for Uuid {
+    #[inline]
+    fn read_func(iter: &mut impl Iterator<Item = u8>) -> Result<Uuid, Box<dyn Error + Send + Sync>> {
+        read_uuid(iter)
+    }
+    #[inline]
+    fn create_func(data: Uuid) -> Vec<u8> {
+        create_uuid(data)
     }
 }
 
@@ -333,8 +488,6 @@ where
         Ok(None)
     }
 }
-
-
 
 pub fn create_option<T>(option: Option<T>) -> Vec<u8>
 where

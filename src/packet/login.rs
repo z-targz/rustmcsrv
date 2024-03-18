@@ -13,8 +13,9 @@ use server_macros::SPacket;
 #[derive(CPacket)]
 #[state(Login)]
 #[id(0)]
-pub struct CDisconnect {
-    reason: JSON,
+#[allow(non_camel_case_types)]
+pub struct CDisconnect_Login {
+    reason: CJSONTextComponent,
 }
 
 #[derive(CPacket)]
@@ -62,6 +63,7 @@ pub struct SLoginStart {
 #[derive(SPacket)]
 #[state(Login)]
 #[id(1)]
+#[allow(unused)]
 pub struct SEncryptionResponse {
     shared_secret: PrefixedByteArray,
     verify_token: PrefixedByteArray,
@@ -70,12 +72,13 @@ pub struct SEncryptionResponse {
 #[derive(SPacket)]
 #[state(Login)]
 #[id(2)]
+#[allow(unused)]
 pub struct SLoginPluginResponse {
     message_id: VarInt,
     data: Option<InferredByteArray>,
 }
 
-#[derive(CPacket)]
+#[derive(SPacket)]
 #[state(Login)]
 #[id(3)]
 pub struct SLoginAcknowledged { }

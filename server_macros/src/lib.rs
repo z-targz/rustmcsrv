@@ -154,9 +154,26 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
     let mut assign: String = String::new();
     let mut writes: String = String::new();
 
+    //borrow variable-sized types
+    fn borrow(str: &str) -> &str {
+        match str {
+            "String" => "&",
+            "JSON" => "&",
+            "CJSONTextComponent" => "&",
+            "PrefixedByteArray" => "&",
+            "InferredByteArray" => "&",
+            "PropertyArray" => "&",
+            _ => "",
+        }
+    }
+
     for field in &fields.named {
         let field_name = field.ident.to_token_stream().to_string();
         
+        let func: &str;
+        let func_string: String;
+
+
         fields_text += field.to_token_stream().to_string().as_str();
         fields_text += ", ";
         
@@ -164,35 +181,37 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
 
 
         let field_type = field.ty.to_token_stream().to_string();
+        if field_type.starts_with("Option") {
+            let option_type = extract_T_from_option(&field_type);
+            func_string = format!("create_option");
+            func = func_string.as_str();
 
-        let func = match field_type.as_str() {
-            "String" => "create_string",
-            "JSON" => "create_string",
-            "VarInt" => "create_var_int",
-            "VarLong" => "create_var_long",
-            "bool" => "create_bool",
-            "u16" => "create_ushort",
-            "Uuid" => "create_uuid",
-            "i64" => "create_long",
-            "f32" => "create_float",
-            "f64" => "create_double",
-            
-            "PrefixedByteArray" => "create_prefixed_byte_array",
-            "InferredByteArray" => "create_inferred_byte_array",
-            "PropertyArray" => "create_property_array",
-            _ => panic!("Type not supported"),
-        };
+            writes += format!("data.extend({func}({}self.{field_name}));", "").as_str();
 
-        let borrow = match field_type.as_str() {
-            "String" => "&",
-            "JSON" => "&",
-            "PrefixedByteArray" => "&",
-            "InferredByteArray" => "&",
-            "PropertyArray" => "&",
-            _ => "",
-        };
+        } else {
+            func = match field_type.as_str() {
+                "String" => "create_string",
+                "JSON" => "create_string",
+                "CJSONTextComponent" => "create_json_text_component",
+                "VarInt" => "create_var_int",
+                "VarLong" => "create_var_long",
+                "bool" => "create_bool",
+                "u8" => "create_u8",
+                "u16" => "create_ushort",
+                "Uuid" => "create_uuid",
+                "i64" => "create_long",
+                "f32" => "create_float",
+                "f64" => "create_double",
+                
+                "PrefixedByteArray" => "create_prefixed_byte_array",
+                "InferredByteArray" => "create_inferred_byte_array",
+                "PropertyArray" => "create_property_array",
+                _ => panic!("Type not supported"),
+            };
+        }
+        
 
-        writes += format!("data.extend({func}({borrow}self.{field_name}));", ).as_str();
+        writes += format!("data.extend({func}({}self.{field_name}));", borrow(field_type.as_str())).as_str();
     }
 
     let assign: proc_macro2::TokenStream = assign.parse().unwrap();
@@ -291,6 +310,20 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
     let mut field_names = String::new();
     let mut let_reads = String::new();
     let mut getters = String::new();
+
+    //borrow variable-sized types
+    fn borrow(str: &str) -> &str {
+        match str {
+            "String" => "&",
+            "JSON" => "&",
+            "CJSONTextComponent" => "&",
+            "PrefixedByteArray" => "&",
+            "InferredByteArray" => "&",
+            "PropertyArray" => "&",
+            _ => "",
+        }
+    }
+
     for field in &fields.named {
         let field_name = field.ident.to_token_stream().to_string();
         field_names += format!("{field_name} : {field_name}, ").as_str();
@@ -299,17 +332,6 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
 
         let func: &str;
         let func_string;
-
-        //borrow variable-sized types
-        fn borrow(str: &str) -> &str {
-            match str {
-                "String" => "&",
-                "PrefixedByteArray" => "&",
-                "InferredByteArray" => "&",
-                "PropertyArray" => "&",
-                _ => "",
-            }
-        }
 
         if field_type.starts_with("Option") {
             let option_type = extract_T_from_option(&field_type);
@@ -328,12 +350,13 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
                 "VarInt" => "read_var_int",
                 "VarLong" => "read_var_long",
                 "bool" => "read_bool",
+                "u8" => "read_ubyte",
                 "u16" => "read_ushort",
                 "Uuid" => "read_uuid",
                 "i64" => "read_long",
                 "f32" => "read_float",
                 "f64" => "read_double",
-    
+                
                 "PrefixedByteArray" => "read_prefixed_byte_array",
                 "InferredByteArray" => "read_inferred_byte_array",
                 "PropertyArray" => "read_property_array",
@@ -413,4 +436,12 @@ pub fn base64_image(input: TokenStream) -> TokenStream {
             quote!{ Err(std::io::Error::from(std::io::ErrorKind::NotFound))}.into()
         }
     }
+}
+
+#[proc_macro]
+pub fn json_text_component(input: TokenStream) -> TokenStream {
+    let input: LitStr = parse_macro_input!(input as LitStr);
+    let text = input.value();
+    let the_string = format!("{{\"text\":\"{text}\"}}");
+    quote!{ #the_string }.into()
 }

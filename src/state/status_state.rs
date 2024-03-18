@@ -17,7 +17,7 @@ use crate::THE_SERVER;
 /// 
 /// __S -> C__ &nbsp; : &nbsp; SPingResponse_Status
 /// 
-pub(in crate::state) async fn status_state(connection: Connection) {
+pub(in crate::state) async fn status_state(mut connection: Connection) {
     let addr = connection.get_addr();
     /*
         Listen for SStatusRequest
@@ -29,13 +29,14 @@ pub(in crate::state) async fn status_state(connection: Connection) {
                 SPacket::SStatusRequest(_) => (),
                 _ => {
                     println!("{addr} > Incorrect packet...");
-                    connection.drop().await;
+                    connection.drop();
                     return;
                 }
             }
         },
         Err(_) => {
-            connection.drop().await;
+            connection.drop();
+            return;
         }
     }
     println!("{addr} > Received SStatusRequest!");
@@ -48,7 +49,7 @@ pub(in crate::state) async fn status_state(connection: Connection) {
         Ok(_) => (),
         Err(_) => {
             println!("{addr} > Error sending packet!");
-            connection.drop().await;
+            connection.drop();
             return;
         }
     };
@@ -67,13 +68,13 @@ pub(in crate::state) async fn status_state(connection: Connection) {
                 _ => {
                     //Incorrect packet
                     println!("{addr} > Incorrect packet");
-                    connection.drop().await;
+                    connection.drop();
                     return;
                 }
             }
         },
         Err(_) => {
-            connection.drop().await;
+            connection.drop();
             return;
         }
     }
@@ -86,12 +87,12 @@ pub(in crate::state) async fn status_state(connection: Connection) {
         Ok(_) => (),
         Err(_) => {
             println!("{addr} > Unable to send packet SPingResponse_Status");
-            connection.drop().await;
+            connection.drop();
             return;
         }
     };
 
-    connection.drop().await;
+    connection.drop();
     println!("Connection Closed: {addr}.");
     return;
 }

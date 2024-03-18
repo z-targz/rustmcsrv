@@ -1,6 +1,7 @@
 #![feature(coroutines)]
 #![feature(iter_advance_by)]
 #![feature(non_null_convenience)]
+#![recursion_limit = "256"]
 
 #[macro_use]
 extern crate serde_json;
@@ -46,7 +47,7 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 lazy_static!{
     pub static ref MOTD: String = "A Minecraft Server (§cMade with Rust!§r)".to_string();
     pub static ref THE_SERVER: Server = Server::new(MAX_PLAYERS, &MOTD);
-    pub static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread().build().unwrap();
+    pub static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread().enable_time().enable_io().build().unwrap();
 }
 
 
