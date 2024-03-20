@@ -20,8 +20,19 @@ base64 = "0.22.0"
 dashmap = "5.5.3"
 reqwest = "0.11.26"
 md5 = "0.7.0"
-hematite-nbt = "0.5.2"
 cesu8 = "1.1.0"
+hematite-nbt = "0.5.2"
+serde_path_to_error = "0.1.16"
+
+[dependencies.fastnbt]
+version = "2.5.0"
+features = ["arbitrary", "arbitrary1"]
+
+[dependencies.quartz_nbt]
+version = "0.2.9"
+features = [
+    "serde"
+]
 
 
 [dependencies.serde]

@@ -15,7 +15,6 @@ pub type VarInt = i32;
 pub type JSON = String;
 
 pub mod registry;
-pub mod nbt;
 
 ///A byte array prefixed by its length as a VarInt
 pub struct PrefixedByteArray {
@@ -44,8 +43,7 @@ impl Property {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-
+#[derive(Serialize, Deserialize, Debug)]
 pub struct CJSONTextComponent {
     #[serde(skip_serializing_if = "Option::is_none")]
     text: Option<String>,
@@ -74,6 +72,7 @@ pub struct CJSONTextComponent {
     #[serde(skip_serializing_if = "Option::is_none")]
     obfuscated: Option<bool>,
 }
+
 
 impl CJSONTextComponent {
     pub fn new(
