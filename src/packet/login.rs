@@ -46,7 +46,8 @@ pub struct CSetCompression {
 #[derive(CPacket)]
 #[state(Login)]
 #[id(4)]
-pub struct CLoginPluginRequest {
+#[allow(non_camel_case_types)]
+pub struct CPluginRequest_Login {
     message_id: VarInt,
     identifier: String, //TODO: Implement custom type alias
     data: InferredByteArray,

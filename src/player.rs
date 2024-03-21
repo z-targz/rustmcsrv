@@ -87,7 +87,7 @@ impl<'a> Player {
             connection_lock.read_next_packet().await
     }
 
-    pub async fn send_packet(&self, packet: impl Clientbound) -> Result<(), tokio::io::Error> {
+    pub async fn send_packet(&self, packet: impl Clientbound) -> Result<(), ConnectionError> {
         let mut connection_lock = self.connection.lock().await;
             connection_lock.send_packet(packet).await
     }
@@ -101,7 +101,7 @@ impl<'a> Player {
     pub async fn disconnect(&self, reason: &str) {
         crate::THE_SERVER.drop_player_by_id(self.id);
         let json_text_component = CJSONTextComponent::from_str(reason).color(0x4);
-        println!("Raw text component: {}", json_text_component.to_string());
+        //println!("Raw text component: {}", json_text_component.to_string());
         match timeout(TIMEOUT, self.get_connection_state()).await {
             Ok(connection_state) => match connection_state {
                 server_util::ConnectionState::Login => {

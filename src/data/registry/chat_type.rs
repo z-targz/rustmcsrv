@@ -1,10 +1,5 @@
 use serde::{Serialize, Deserialize};
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ChatType {
-    chat: Decoration,
-    narration: Decoration,
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Decoration {
@@ -19,6 +14,18 @@ pub struct Decoration {
 // but may be in the future
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Style {
-    //TODO
+    #[serde(skip_serializing_if = "Option::is_none")]
+    color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bold: Option<i8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    italic: Option<i8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    underlined: Option<i8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    strikethrough: Option<i8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    obfuscated: Option<i8>,
+
 }
 

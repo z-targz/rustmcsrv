@@ -1,10 +1,14 @@
 #![feature(coroutines)]
 #![feature(iter_advance_by)]
 #![feature(non_null_convenience)]
+#![feature(test)]
 #![recursion_limit = "256"]
+
 
 #[macro_use]
 extern crate serde_json;
+
+extern crate test;
 
 use std::fs::{OpenOptions, File};
 use std::path::Path;
@@ -48,6 +52,7 @@ lazy_static!{
     pub static ref MOTD: String = "A Minecraft Server (§cMade with Rust!§r)".to_string();
     pub static ref THE_SERVER: Server = Server::new(MAX_PLAYERS, &MOTD);
     pub static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread().enable_time().enable_io().build().unwrap();
+    pub static ref REGISTRY_NBT: Vec<u8> = data::registry::get_registry_nbt().unwrap();
 }
 
 

@@ -4,14 +4,59 @@ use std::time::{Duration, SystemTime};
 use server_util::ConnectionState;
 use tokio::time;
 
-use crate::packet::configuration::CKeepAlive_Config;
+use crate::packet::configuration::*;
 use crate::player::Player;
+use crate::SPacket;
 
 pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
     println!("Made it to the configuration state!");
     player_ref.disconnect("Not implemented yet ;)").await;
     keep_alive(Arc::downgrade(&player_ref));
-    
+    //TODO: Handle plugin message.
+    //TODO: Handle Client Information.
+    //TODO: Clientbound plugin message
+    //TODO: Feature Flags
+    match player_ref.send_packet(CRegistryData::new()).await {
+        Ok(_) => (),
+        Err(e) => {
+            player_ref.disconnect(e.to_string().as_str()).await;
+            return;
+        },
+    }
+    //TODO: Update Tags
+    match player_ref.send_packet(CFinishConfig::new()).await {
+        Ok(_) => (),
+        Err(e) => {
+            player_ref.disconnect(e.to_string().as_str()).await;
+            return;
+        }
+    }
+    //TODO: Handle these packets accordingly.
+    match filter_packets_until_s_acknowledge_finish_config(player_ref.clone()).await {
+        Ok(_) => (),
+        Err(_) => {
+            player_ref.disconnect("Invalid Packet.").await;
+            return;
+        }
+    }
+    println!("Received SAcknowledgeFinishConfig!");
+    println!("Switching to play state...");
+
+}
+
+async fn filter_packets_until_s_acknowledge_finish_config(player_ref: Arc<Player>) -> Result<(), ()> {
+    for _ in 0..3 {
+        match player_ref.read_next_packet().await {
+            Ok(packet) => match packet {
+                SPacket::SPluginMessage_Config(_) => continue,
+                SPacket::SClientInformation_Config(_) => continue,
+                SPacket::SAcknowledgeFinishConfig(_) => return Ok(()),
+                _ => return Err(())
+            }
+            Err(_) => return Err(()),
+        }
+    }
+    Err(())
 }
 
 fn keep_alive(weak: Weak<Player>) {
@@ -24,16 +69,28 @@ fn keep_alive(weak: Weak<Player>) {
                 Some(player) => {
                     match player.get_connection_state().await {
                         ConnectionState::Configuration => {
+                            //potential BUG: Client might not immediately send the keep alive packet
                             let mut lock = player.get_connection().lock().await;
                             let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
-                            match lock.send_packet(CKeepAlive_Config::new(time)).await {
-                                Ok(_) => (),
-                                Err(_) => {
-                                    player.disconnect("Timed out.").await;
-                                    break;
+                            match time::timeout(crate::TIMEOUT, lock.send_packet(CKeepAlive_Config::new(time))).await {
+                                Ok(_) => {
+                                    match lock.read_next_packet().await {
+                                        Ok(s_packet) => match s_packet {
+                                            SPacket::SKeepAlive_Config(packet) => {
+                                                if packet.get_keep_alive_id() == time {
+                                                    drop(lock);
+                                                    continue;
+                                                }
+                                            },
+                                            _ => ()
+                                        },
+                                        Err(_) => ()
+                                    }
                                 },
+                                Err(_) => (),
                             }
-                            drop(lock);
+                            player.disconnect("Timed out.").await;
+                            break;
                         },
                         _ => break
                     }

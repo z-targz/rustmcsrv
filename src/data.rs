@@ -2,7 +2,6 @@ use std::error::Error;
 use std::pin::Pin;
 
 use serde::{Serialize, Deserialize};
-use server_macros::json_text_component;
 use server_util::error::IterEndError;
 
 use futures::stream::Stream;
@@ -13,6 +12,8 @@ use uuid::Uuid;
 pub type VarInt = i32;
 
 pub type JSON = String;
+
+pub type NBT = Vec<u8>;
 
 pub mod registry;
 
@@ -265,6 +266,16 @@ pub fn read_property_array(iter: &mut impl Iterator<Item = u8>) -> Result<Proper
     Ok(out)
 }
 
+/// Reads NBT data from the iterator
+/// This is wrapped in an empty Result for compatibility with other functions and macros.
+/// 
+/// This is lazily evaluated, so an invalid NBT error needs to be handled 
+/// when the NBT is actually serialized into the appropriate data structure.
+pub fn read_nbt(iter: &mut impl Iterator<Item = u8>) -> Result<NBT, ()> {
+    iter.next(); // Skip first element (0x0a)
+    Ok(vec![10u8, 0u8, 0u8].into_iter().chain(iter).collect())
+}
+
 pub fn read_inferred_byte_array(iter: &mut impl Iterator<Item = u8>) -> Result<InferredByteArray, Box<dyn Error + Send + Sync>> {
     Ok(InferredByteArray{bytes : iter.collect()})
 }
@@ -391,6 +402,14 @@ pub fn create_property_array(array: &PropertyArray) -> Vec<u8> {
     out
 }
 
+/// This function strips the root tag from the provided NBT so it can be sent
+/// over the network in versions 1.20.2+
+pub fn create_nbt(nbt: &NBT) -> Vec<u8> {
+    let mut out = vec![10u8];
+    out.extend(nbt.as_slice()[3..].iter());
+    out
+}
+
 pub fn create_float(f: f32) -> Vec<u8> {
     f.to_be_bytes().to_vec()
 }
@@ -505,6 +524,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test::Bencher;
     #[test]
     fn test_read_var_int() {
         let varint_0: Vec<u8> = vec![0x00];
@@ -743,5 +763,56 @@ mod tests {
         println!("uuid 2: {}", uuid2.to_string());
         assert_eq!(uuid, uuid2);
     }
-    
+
+    #[bench]
+    // This is the fastest implementation so far
+    fn create_nbt_a(bencher: &mut Bencher) {
+        let nbt = registry::get_registry_nbt().unwrap();
+        fn create_nbt_temp(nbt: &NBT) -> Vec<u8> {
+            let mut out = vec![10u8];
+            out.extend(nbt.as_slice()[3..].iter());
+            out
+        }
+        bencher.iter(|| {
+            let _ = create_nbt_temp(&nbt.clone());
+        });
+    }
+    #[bench]
+    fn read_nbt_a(bencher: &mut Bencher) {
+        let nbt = registry::get_registry_nbt().unwrap();
+        fn create_nbt_temp(nbt: NBT) -> Vec<u8> {
+            let mut out = vec![10u8];
+            out.extend(nbt.as_slice()[3..].into_iter());
+            out
+        }
+        let nbt_temp = create_nbt_temp(nbt);
+        let nbt_iter = nbt_temp.into_iter();
+        fn read_nbt_temp(iter: &mut impl Iterator<Item = u8>) -> Result<NBT, ()> {
+            iter.next(); // Skip first element (0x0a)
+            let mut out = vec![10u8, 0u8, 0u8];
+            out.extend(iter);
+            Ok(out)
+        }
+        bencher.iter(|| {
+            let x = read_nbt_temp(&mut nbt_iter.clone()).unwrap();
+        });
+    }
+    #[bench]
+    fn read_nbt_b(bencher: &mut Bencher) {
+        let nbt = registry::get_registry_nbt().unwrap();
+        fn create_nbt_temp(nbt: NBT) -> Vec<u8> {
+            let mut out = vec![10u8];
+            out.extend(nbt.as_slice()[3..].into_iter());
+            out
+        }
+        let nbt_temp = create_nbt_temp(nbt);
+        let nbt_iter = nbt_temp.into_iter();
+        fn read_nbt_temp(iter: &mut impl Iterator<Item = u8>) -> Result<NBT, ()> {
+            iter.next(); // Skip first element (0x0a)
+            Ok(vec![10u8, 0u8, 0u8].into_iter().chain(iter).collect())
+        }
+        bencher.iter(|| {
+            let x = read_nbt_temp(&mut nbt_iter.clone()).unwrap();
+        });
+    }
 }

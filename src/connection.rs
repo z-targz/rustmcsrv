@@ -19,6 +19,7 @@ pub enum ConnectionError {
     ConnectionClosed,
     PacketCreateError(String),
     Timeout,
+    IO(String),
     Other(String),
 }
 
@@ -30,6 +31,7 @@ impl std::fmt::Display for ConnectionError {
             ConnectionError::ConnectionClosed => {"Connection Closed.".to_string()}
             ConnectionError::PacketCreateError(s) => {format!("Error Creating Packet ({s}).")}
             ConnectionError::Timeout => {"Timed out.".to_string()}
+            ConnectionError::IO(s) => {format!("I/O error ({s}).")},
             ConnectionError::Other(s) => {format!("({s})")}
         };
         write!(f, "ConnectionError: {err_type}.")
@@ -51,6 +53,12 @@ impl From<CreatePacketError> for ConnectionError {
 impl From<Elapsed> for ConnectionError {
     fn from(_: Elapsed) -> Self {
         ConnectionError::Timeout
+    }
+}
+
+impl From<tokio::io::Error> for ConnectionError {
+    fn from(value: tokio::io::Error) -> Self {
+        ConnectionError::IO(value.to_string())
     }
 }
 
@@ -105,10 +113,13 @@ impl Connection {
         let _ = self.write.shutdown();
     }
 
-    pub async fn send_packet(&mut self, packet: impl Clientbound) -> Result<(), tokio::io::Error> {
-        match self.write.write_all(packet.to_be_bytes().as_slice()).await {
-            Ok(_) => Ok(()),
-            Err(e) => Err(e),
+    pub async fn send_packet(&mut self, packet: impl Clientbound) -> Result<(), ConnectionError> {
+        match timeout(TIMEOUT, self.write.write_all(packet.to_be_bytes().as_slice())).await {
+            Ok(result) => match result {
+                Ok(_) => Ok(()),
+                Err(e) => Err(e)?
+            },
+            Err(e) => Err(e)?
         }
     }
 

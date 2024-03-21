@@ -1,5 +1,14 @@
 use std::error::Error;
+use server_macros::create_handshake_packets;
+use server_macros::create_status_packets;
+use server_macros::create_login_packets;
+use server_macros::create_config_packets;
+use server_macros::create_play_packets;
+
+
 use server_util::ConnectionState;
+
+use server_macros::register_packets;
 
 pub mod handshake;
 pub mod status;
@@ -26,14 +35,7 @@ pub enum CPacket {
     CPingResponse_Status(Box<status::CPingResponse_Status>),
 }*/
 
-#[allow(non_camel_case_types)]
-pub enum SPacket {
-    SHandshake(Box<handshake::SHandshake>),
-    SStatusRequest(Box<status::SStatusRequest>),
-    SPingRequest_Status(Box<status::SPingRequest_Status>),
-    SLoginStart(Box<login::SLoginStart>),
-    SLoginAcknowledged(Box<login::SLoginAcknowledged>),
-}
+register_packets!{}
 
 #[derive(Debug)]
 pub enum CreatePacketError {
@@ -61,27 +63,21 @@ impl From<Box<dyn Error + Send + Sync>> for CreatePacketError {
 
 
 pub fn create_packet(id: i32, state: ConnectionState, iter: &mut impl Iterator<Item = u8>) -> Result<SPacket, CreatePacketError> {
-    //TODO: Replace this with a macro!
     match state {
-        ConnectionState::Handshake => match id {
-            0 => Ok(SPacket::SHandshake(handshake::SHandshake::parse(iter)?)),
-            _ => Err(CreatePacketError::InvalidPacketIDError),
+        ConnectionState::Handshake => {
+            create_handshake_packets!()
         },
-        ConnectionState::Status => match id {
-            0 => Ok(SPacket::SStatusRequest(status::SStatusRequest::parse(iter)?)),
-            1 => Ok(SPacket::SPingRequest_Status(status::SPingRequest_Status::parse(iter)?)),
-            _ => Err(CreatePacketError::InvalidPacketIDError),
+        ConnectionState::Status => {
+            create_status_packets!()
         },
-        ConnectionState::Login => match id {
-            0 => Ok(SPacket::SLoginStart(login::SLoginStart::parse(iter)?)),
-            3 => Ok(SPacket::SLoginAcknowledged(login::SLoginAcknowledged::parse(iter)?)),
-            _ => Err(CreatePacketError::InvalidPacketIDError),
+        ConnectionState::Login => {
+            create_login_packets!()
         }
-        ConnectionState::Configuration => match id {
-            _ => Err(CreatePacketError::InvalidPacketIDError),
+        ConnectionState::Configuration => {
+            create_config_packets!()
         }
-        ConnectionState::Play => match id {
-            _ => Err(CreatePacketError::InvalidPacketIDError),
+        ConnectionState::Play => {
+            create_play_packets!()
         }
     }
 }

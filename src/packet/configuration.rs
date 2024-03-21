@@ -40,9 +40,37 @@ pub struct CKeepAlive_Config {
     keep_alive_id: i64,
 }
 
-//TODO: CRegistryData (id: 5)
-// registry_codec: NBT
-// https://wiki.vg/Registry_Data
+//id = 5
+pub struct CRegistryData {}
+
+impl Packet for CRegistryData {
+    fn get_id(&self) -> i32 where Self: Sized {
+        5
+    }
+
+    fn get_associated_state(&self) -> ConnectionState {
+        ConnectionState::Configuration
+    }
+}
+
+impl Clientbound for CRegistryData {
+    fn to_be_bytes(&self) -> Vec<u8> {
+        let mut data: Vec<u8> = Vec::new();
+        data.extend(create_nbt(&crate::REGISTRY_NBT));
+        let mut out: Vec<u8> = create_var_int(data.len() as i32 + 1);
+        out.push(5 as u8);
+        out.append(&mut data);
+        out
+    }
+}
+
+impl CRegistryData {
+    pub fn new() -> Self {
+        CRegistryData{}
+    }
+}
+
+
 
 #[derive(CPacket)]
 #[state(Configuration)]
@@ -82,7 +110,21 @@ pub struct SClientInformation_Config {
 #[derive(SPacket)]
 #[state(Configuration)]
 #[id(1)]
-pub struct SLoginPluginRequest {
+#[allow(non_camel_case_types)]
+pub struct SPluginMessage_Config {
     identifier: String //TODO: implement custom type alias
 
+}
+
+#[derive(SPacket)]
+#[state(Configuration)]
+#[id(2)]
+pub struct SAcknowledgeFinishConfig {}
+
+#[derive(SPacket)]
+#[state(Configuration)]
+#[id(3)]
+#[allow(non_camel_case_types)]
+pub struct SKeepAlive_Config {
+    keep_alive_id: i64,
 }

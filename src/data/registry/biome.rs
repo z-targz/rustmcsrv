@@ -1,16 +1,6 @@
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Biome {
-    has_precipitation: i8,
-    temperature: f32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    temperature_modifier: Option<String>,
-    downfall: f32,
-    effects: Effects,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
 pub struct Effects {
     fog_color: i32,
     water_color: i32,
@@ -25,11 +15,13 @@ pub struct Effects {
     #[serde(skip_serializing_if = "Option::is_none")]
     particle: Option<Particle>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    ambient_sound: Option<AmbientSound>,
+    ambient_sound: Option<String>,  //potential BUG: Implement Option<AmbientSound>,
+                                    //and custom deser that either does string or struct.
+                                    //currently MC only uses string, so we're fine for now.
     #[serde(skip_serializing_if = "Option::is_none")]
     mood_sound: Option<MoodSound>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    additions_sound: Option<AdditionsSound>,
+    additions_sound: Option<AdditionsSound>,   
     #[serde(skip_serializing_if = "Option::is_none")]
     music: Option<Music>,
 }
@@ -50,10 +42,11 @@ pub struct ParticleOptions {
 
 //TODO: move this somewhere appropriate
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(untagged)]
 pub enum ParticleData {
     ambient_entity_effect,
     angry_villager,
-    block(i32),
+    block(i32)
     //...
     //TODO: fill this out https://wiki.vg/Particles
 }
