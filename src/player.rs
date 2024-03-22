@@ -97,11 +97,10 @@ impl<'a> Player {
             connection_lock.get_connection_state().await
     }
 
-
     pub async fn disconnect(&self, reason: &str) {
         crate::THE_SERVER.drop_player_by_id(self.id);
-        let json_text_component = CJSONTextComponent::from_str(reason).color(0x4);
-        //println!("Raw text component: {}", json_text_component.to_string());
+        let json_text_component = CJSONTextComponent::from_str(reason);
+        println!("Raw text component: {}", json_text_component.to_string());
         match timeout(TIMEOUT, self.get_connection_state()).await {
             Ok(connection_state) => match connection_state {
                 server_util::ConnectionState::Login => {

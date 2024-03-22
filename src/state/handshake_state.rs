@@ -25,13 +25,10 @@ pub(in crate) async fn handshake_state(mut connection: Connection) {
                     match packet.get_next_state()
                     {
                         1 => {
-                            connection.set_connection_state(ConnectionState::Status).await;
-                            println!("{addr} > Next State: Status(1)");
                             status_state(connection).await;
                         }
                         2 => {
-                            connection.set_connection_state(ConnectionState::Login).await;
-                            println!("{addr} > Next State: Login(1)");
+                            
                             login_state(connection).await;
                         }
                         _ => {

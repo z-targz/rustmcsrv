@@ -17,17 +17,19 @@ pub type NBT = Vec<u8>;
 
 pub mod registry;
 
+#[derive(Debug)]
 ///A byte array prefixed by its length as a VarInt
 pub struct PrefixedByteArray {
     bytes: Vec<u8>,
 }
 
+#[derive(Debug)]
 ///A byte array inferred from packet length. This is always at the end of the packet, so we just collect the iterator and return it
 pub struct InferredByteArray {
     bytes: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Property {
     name: String,
     value: String,
@@ -367,7 +369,10 @@ pub fn create_string(s: &String) -> Vec<u8> {
 }
 
 pub fn create_json_text_component(json_text_component: &CJSONTextComponent) -> Vec<u8> {
-    create_string(&serde_json::to_string(json_text_component).unwrap())
+    let mut the_string = serde_json::to_string(json_text_component).unwrap();
+    the_string.pop();
+    the_string.remove(0);
+    create_string(&the_string)
 }
 
 pub fn create_prefixed_byte_array(array: &PrefixedByteArray) -> Vec<u8> {

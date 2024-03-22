@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime};
 
@@ -6,16 +7,30 @@ use tokio::time;
 
 use crate::packet::configuration::*;
 use crate::player::Player;
+use crate::state::play_state::play_state;
 use crate::SPacket;
 
 pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
+    let mut lock = player_ref.get_connection().lock().await;
+    lock.set_connection_state(ConnectionState::Configuration).await;
+    drop(lock);
+
     println!("Made it to the configuration state!");
-    player_ref.disconnect("Not implemented yet ;)").await;
     keep_alive(Arc::downgrade(&player_ref));
     //TODO: Handle plugin message.
     //TODO: Handle Client Information.
     //TODO: Clientbound plugin message
     //TODO: Feature Flags
+
+    //TODO: Handle these packets accordingly.
+    match filter_packets_until_s_acknowledge_finish_config(player_ref.clone()).await {
+        Ok(_) => (),
+        Err(e) => {
+            player_ref.disconnect(e.to_string().as_str()).await;
+            return;
+        }
+    }
+
     match player_ref.send_packet(CRegistryData::new()).await {
         Ok(_) => (),
         Err(e) => {
@@ -31,32 +46,25 @@ pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
             return;
         }
     }
-    //TODO: Handle these packets accordingly.
-    match filter_packets_until_s_acknowledge_finish_config(player_ref.clone()).await {
-        Ok(_) => (),
-        Err(_) => {
-            player_ref.disconnect("Invalid Packet.").await;
-            return;
-        }
-    }
+    
     println!("Received SAcknowledgeFinishConfig!");
     println!("Switching to play state...");
-
+    play_state(player_ref).await;
 }
 
-async fn filter_packets_until_s_acknowledge_finish_config(player_ref: Arc<Player>) -> Result<(), ()> {
+async fn filter_packets_until_s_acknowledge_finish_config(player_ref: Arc<Player>) -> Result<(), Box<dyn Error + Send + Sync>> {
     for _ in 0..3 {
         match player_ref.read_next_packet().await {
             Ok(packet) => match packet {
                 SPacket::SPluginMessage_Config(_) => continue,
                 SPacket::SClientInformation_Config(_) => continue,
                 SPacket::SAcknowledgeFinishConfig(_) => return Ok(()),
-                _ => return Err(())
+                _ => return Err(format!("Wrong packet: {:?}!", packet))?
             }
-            Err(_) => return Err(()),
+            Err(e) => return Err(Box::new(e)),
         }
     }
-    Err(())
+    Err("Did not find SAcknowledgeFinishConfig!")?
 }
 
 fn keep_alive(weak: Weak<Player>) {

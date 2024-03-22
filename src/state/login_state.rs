@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::sync::Arc;
 
+use server_util::ConnectionState;
 use tokio::time::timeout;
 use uuid::Uuid;
 use serde::Deserialize;
@@ -35,7 +36,11 @@ use crate::TIMEOUT;
 /// __C -> S__ SLoginAcknowledged
 /// 
 pub(in crate::state) async fn login_state(mut connection: Connection) {
+    connection.set_connection_state(ConnectionState::Login).await;
+    
+
     let addr = connection.get_addr();
+    println!("{addr} > Next State: Login(1)", );
     /*
         Listen for SLoginStart
     */

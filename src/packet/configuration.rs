@@ -70,8 +70,6 @@ impl CRegistryData {
     }
 }
 
-
-
 #[derive(CPacket)]
 #[state(Configuration)]
 #[id(6)]
@@ -92,6 +90,9 @@ pub struct CAddResourcePack_Config {
     //prompt_message: Option<TextComponent>, TODO: implement NBT TextComponent
 }
 
+//TODO: ID 8: https://wiki.vg/Protocol#Feature_Flags
+
+#[derive(Debug)]
 #[derive(SPacket)]
 #[state(Configuration)]
 #[id(0)]
@@ -107,6 +108,7 @@ pub struct SClientInformation_Config {
     allow_server_listings: bool,
 }
 
+#[derive(Debug)]
 #[derive(SPacket)]
 #[state(Configuration)]
 #[id(1)]
@@ -116,11 +118,13 @@ pub struct SPluginMessage_Config {
 
 }
 
+#[derive(Debug)]
 #[derive(SPacket)]
 #[state(Configuration)]
 #[id(2)]
 pub struct SAcknowledgeFinishConfig {}
 
+#[derive(Debug)]
 #[derive(SPacket)]
 #[state(Configuration)]
 #[id(3)]

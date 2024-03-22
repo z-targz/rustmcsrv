@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use base64::prelude::*;
+use server_util::ConnectionState;
 
 use crate::connection::Connection;
 use crate::SPacket;
@@ -18,7 +19,9 @@ use crate::THE_SERVER;
 /// __S -> C__ &nbsp; : &nbsp; SPingResponse_Status
 /// 
 pub(in crate::state) async fn status_state(mut connection: Connection) {
+    connection.set_connection_state(ConnectionState::Status).await;
     let addr = connection.get_addr();
+    println!("{addr} > Next State: Status(1)");
     /*
         Listen for SStatusRequest
     */

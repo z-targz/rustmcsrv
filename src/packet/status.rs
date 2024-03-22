@@ -9,6 +9,7 @@ use server_util::ConnectionState;
 use server_macros::CPacket;
 use server_macros::SPacket;
 
+
 #[derive(CPacket)]
 #[state(Status)]
 #[id(0)]
@@ -24,11 +25,13 @@ pub struct CPingResponse_Status {
     payload: i64,
 }
 
+#[derive(Debug)]
 #[derive(SPacket)]
 #[state(Status)]
 #[id(0)]
 pub struct SStatusRequest { }
 
+#[derive(Debug)]
 #[derive(SPacket)]
 #[state(Status)]
 #[id(1)]

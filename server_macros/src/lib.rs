@@ -418,6 +418,7 @@ pub fn register_packets(_: TokenStream) -> TokenStream {
 
     let packets: proc_macro2::TokenStream = packets.parse().unwrap();
     quote! {
+        #[derive(Debug)]
         #[allow(non_camel_case_types)]
         pub enum SPacket {
             #packets

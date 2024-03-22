@@ -8,6 +8,7 @@ use crate::data::*;
 
 use server_macros::SPacket;
 
+#[derive(Debug)]
 #[derive(SPacket)]
 #[state(Handshake)]
 #[id(0)]
