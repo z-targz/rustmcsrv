@@ -6,21 +6,28 @@ use uuid::Uuid;
 use crate::player::Player;
 use crate::player::Players;
 
+use server_properties::ServerProperties;
+
+pub mod server_properties;
+
 pub struct Server {
     //const
-    max_players: usize,
-    motd: String,
-    //nonconst
+    properties: ServerProperties,
+
     players: Players,
 }
 
 impl Server {
-    pub fn new(max_players: usize, motd: &String) -> Self {
+    pub fn new(properties: ServerProperties) -> Self {
+        let max_players = properties.get_max_players();
         Server { 
-            max_players : max_players,
-            motd : motd.clone(),
-            players : Players::new(max_players),
+            properties : properties,
+            players : Players::new(max_players as usize),
         }
+    }
+
+    pub fn get_properties(&self) -> &ServerProperties {
+        &self.properties
     }
 
     pub async fn register_player(&self, player: Player) -> Arc<Player> {
@@ -28,11 +35,11 @@ impl Server {
     }
 
     pub fn get_max_players(&self) -> usize {
-        self.max_players
+        self.get_properties().get_max_players() as usize
     }
 
     pub fn get_motd(&self) -> &String {
-        &self.motd
+        &self.get_properties().get_motd()
     }
 
     pub fn get_players_iter(&self) -> impl Iterator<Item = Weak<Player>> + '_ {

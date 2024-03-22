@@ -56,8 +56,8 @@ impl Packet for CRegistryData {
 impl Clientbound for CRegistryData {
     fn to_be_bytes(&self) -> Vec<u8> {
         let mut data: Vec<u8> = Vec::new();
-        data.extend(create_nbt(&crate::REGISTRY_NBT));
-        let mut out: Vec<u8> = create_var_int(data.len() as i32 + 1);
+        data.extend(&crate::REGISTRY_NBT.to_protocol_bytes());
+        let mut out: Vec<u8> = VarInt::new(data.len() as i32 + 1).to_protocol_bytes();
         out.push(5 as u8);
         out.append(&mut data);
         out

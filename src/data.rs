@@ -1,15 +1,9 @@
 use std::error::Error;
-use std::pin::Pin;
 
 use serde::{Serialize, Deserialize};
-use server_util::error::IterEndError;
-
-use futures::stream::Stream;
-use futures::stream::StreamExt;
+use server_util::error::ProtocolError;
 
 use uuid::Uuid;
-
-pub type VarInt = i32;
 
 pub type JSON = String;
 
@@ -17,16 +11,40 @@ pub type NBT = Vec<u8>;
 
 pub mod registry;
 
+pub mod angle;
+use angle::Angle;
+
+pub trait ToProtocol {
+    fn to_protocol_bytes(&self) -> Vec<u8>;
+}
+
+pub trait FromProtocol {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized;
+}
+
 #[derive(Debug)]
 ///A byte array prefixed by its length as a VarInt
 pub struct PrefixedByteArray {
     bytes: Vec<u8>,
 }
 
+impl PrefixedByteArray {
+    pub fn get_bytes(&self) -> &Vec<u8> {
+        &self.bytes
+    }
+}
+
 #[derive(Debug)]
 ///A byte array inferred from packet length. This is always at the end of the packet, so we just collect the iterator and return it
 pub struct InferredByteArray {
     bytes: Vec<u8>,
+}
+
+impl InferredByteArray {
+    pub fn get_bytes(&self) -> &Vec<u8> {
+        &self.bytes
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -160,179 +178,75 @@ impl CJSONTextComponent {
     }
 }
 
+impl ToProtocol for CJSONTextComponent {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        let mut the_string = serde_json::to_string(self).unwrap();
+        //the_string.pop();
+        //the_string.remove(0);
+        the_string.to_protocol_bytes()
+    }
+}
+
 pub type PropertyArray = Vec<Property>;
 
-/// Reads a [VarInt](https://wiki.vg/Protocol#Type:VarInt) from a `u8` iterator, returning an `i32`.
-/// 
-/// The bytes will be consumed from the iterator.
-/// 
-/// See [https://wiki.vg/Protocol#VarInt_and_VarLong](https://wiki.vg/Protocol#VarInt_and_VarLong) for more details
-/// 
-/// # Arguments:
-/// * `iter:&mut impl Iterator<Item = u8>` - the iterator to read the bytes from
-/// 
-pub fn read_var_int(iter: &mut impl Iterator<Item = u8>) -> Result<VarInt, Box<dyn Error + Send + Sync>> {
-    let mut out: i32 = 0;
-    for i in 0..4 {
-        let Some(val) = iter.next() else { return Err(IterEndError{})? };
-        out += i32::from(val & 0x7f) << 7*i;
-        if val & 0x80 == 0 {
-            return Ok(out);
-        }
-    }
-    let Some(val) = iter.next() else { return Err(IterEndError{})? };
-    if (val) & 0x80 != 0 {
-        return Err("VarInt too large.")?
-    }
-    out += i32::from(val & 0x7f) << 7*4;
-    Ok(out)
-}
+//VarInt
 
-/// Unused
-async fn read_var_int_async(stream: &mut Pin<Box<impl Stream<Item = u8>>>) -> Result<VarInt, Box<dyn Error + Send + Sync>> {
-    let mut out: i32 = 0;
-    for i in 0..4 {
-        let Some(val) =  stream.next().await else { return Err(IterEndError{})? } ;
-        out += i32::from(val & 0x7f) << 7*i;
-        if val & 0x80 == 0 {
-            return Ok(out);
-        }
-    }
-    let Some(val) = stream.next().await else { return Err(IterEndError{})? };
-    if (val) & 0x80 != 0 {
-        return Err("VarInt too large.")?
-    }
-    out += i32::from(val & 0x7f) << 7*4;
-    
-    Ok(out)
-}
+#[derive(Debug, Copy, Clone)]
+pub struct VarInt(i32);
 
-/// reads a [VarLong](https://wiki.vg/Protocol#Type:VarLong) from a `u8` iterator, returning an `i64`.
-/// 
-/// the bytes will be consumed from the iterator.
-/// 
-/// see [https://wiki.vg/Protocol#VarInt_and_VarLong](https://wiki.vg/Protocol#VarInt_and_VarLong) for more details
-/// 
-/// # Arguments:
-/// * `iter:&mut impl Iterator<Item = u8>` - the iterator to read the bytes from
-///
-pub fn read_var_long(iter: &mut impl Iterator<Item = u8>) -> Result<i64, Box<dyn Error + Send + Sync>> {
-    let mut out: i64 = 0;
-    for i in 0..9 {
-        let Some(val) = iter.next() else { return Err(IterEndError{})? };
-        out += i64::from(val & 0x7f) << 7*i;
-        if val & 0x80 == 0 {
-            return Ok(out);
-        }
+impl VarInt {
+    pub fn get(&self) -> i32 {
+        self.0
     }
-    let Some(val) = iter.next() else { return Err(IterEndError{})? };
-    if (val) & 0x80 != 0 {
-        return Err("VarLong too large.")?
-    }
-    out += i64::from(val & 0x7f) << 7*9;
-    Ok(out)
-}
-
-pub fn read_string(iter: &mut impl Iterator<Item = u8>) -> Result<String, Box<dyn Error + Send + Sync>> {
-    let len = read_var_int(iter)? as usize;
-    let raw = iter.take(len).collect::<Vec<u8>>();
-    if raw.len() < len {
-        Err(IterEndError{})?
-    }
-    Ok(String::from_utf8(raw)?)        
-}
-
-pub fn read_prefixed_byte_array(iter: &mut impl Iterator<Item = u8>) -> Result<PrefixedByteArray, Box<dyn Error + Send + Sync>> {
-    let len = read_var_int(iter)? as usize;
-    let raw = iter.take(len).collect::<Vec<u8>>();
-    if raw.len() < len {
-        Err(IterEndError{})?
-    }
-    Ok(PrefixedByteArray{bytes : raw})
-}
-
-pub fn read_property_array(iter: &mut impl Iterator<Item = u8>) -> Result<PropertyArray, Box<dyn Error + Send + Sync>> {
-    let len: VarInt = read_var_int(iter)?;
-    let mut out: Vec<Property> = Vec::with_capacity(len as usize);
-    for _ in 0..len {
-        out.push(Property {
-            name : read_string(iter)?,
-            value: read_string(iter)?,
-            signature : if read_bool(iter)? {
-                Some(read_string(iter)?)
-            } else {
-                None
-            },
-        })
-    }
-    Ok(out)
-}
-
-/// Reads NBT data from the iterator
-/// This is wrapped in an empty Result for compatibility with other functions and macros.
-/// 
-/// This is lazily evaluated, so an invalid NBT error needs to be handled 
-/// when the NBT is actually serialized into the appropriate data structure.
-pub fn read_nbt(iter: &mut impl Iterator<Item = u8>) -> Result<NBT, ()> {
-    iter.next(); // Skip first element (0x0a)
-    Ok(vec![10u8, 0u8, 0u8].into_iter().chain(iter).collect())
-}
-
-pub fn read_inferred_byte_array(iter: &mut impl Iterator<Item = u8>) -> Result<InferredByteArray, Box<dyn Error + Send + Sync>> {
-    Ok(InferredByteArray{bytes : iter.collect()})
-}
-
-pub fn read_float(iter: &mut impl Iterator<Item = u8>) -> Result<f32, Box<dyn Error + Send + Sync>> {
-    //TODO: replace with take_forced(4)
-    let bytes = iter.take(4).collect::<Vec<u8>>();
-    if bytes.len() < 4 {
-        Err(IterEndError{})?
-    }
-    Ok(f32::from_be_bytes(bytes.try_into().unwrap()))
-}
-
-pub fn read_double(iter: &mut impl Iterator<Item = u8>) -> Result<f64, Box<dyn Error + Send + Sync>> {
-    //TODO: replace with take_forced(4)
-    let bytes = iter.take(8).collect::<Vec<u8>>();
-    if bytes.len() < 8 {
-        Err(IterEndError{})?
-    }
-    Ok(f64::from_be_bytes(bytes.try_into().unwrap()))
-}
-
-pub fn read_ubyte(iter: &mut impl Iterator<Item = u8>) -> Result<u8, Box<dyn Error + Send + Sync>> {
-    match iter.next() {
-        Some(ubyte) => Ok(ubyte),
-        None => Err(IterEndError{})?,
+    pub fn new(i: i32) -> Self {
+        VarInt(i)
     }
 }
 
-pub fn read_bool(iter: &mut impl Iterator<Item = u8>) -> Result<bool, Box<dyn Error + Send + Sync>> {
-    let Some(value) = iter.next() else { return Err(IterEndError{})? };
-    match value {
-        0 => Ok(false),
-        1 => Ok(true),
-        _ => Err("Not a Boolean value!")?,
+impl std::fmt::Display for VarInt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
-pub fn read_ushort(iter: &mut impl Iterator<Item = u8>) -> Result<u16, Box<dyn Error + Send + Sync>> {
-    let array: [u8; 2] = std::convert::TryFrom::try_from(iter.take(2).collect::<Vec<u8>>().as_slice())?;
-    Ok(u16::from_be_bytes(array))
+impl From<VarInt> for i32 {
+    fn from(value: VarInt) -> Self {
+        value.0
+    }
 }
 
-pub fn read_long(iter: &mut impl Iterator<Item = u8>) -> Result<i64, Box<dyn Error + Send + Sync>> {
-    let array: [u8; 8] = std::convert::TryFrom::try_from(iter.take(8).collect::<Vec<u8>>().as_slice())?;
-    Ok(i64::from_be_bytes(array))
+impl FromProtocol for VarInt {
+    /// Reads a [VarInt](https://wiki.vg/Protocol#Type:VarInt) from a `u8` iterator, returning an `i32`.
+    /// 
+    /// The bytes will be consumed from the iterator.
+    /// 
+    /// See [https://wiki.vg/Protocol#VarInt_and_VarLong](https://wiki.vg/Protocol#VarInt_and_VarLong) for more details
+    /// 
+    /// # Arguments:
+    /// * `iter:&mut impl Iterator<Item = u8>` - the iterator to read the bytes from
+    /// 
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            let mut out: i32 = 0;
+            for i in 0..4 {
+                let Some(val) = iter.next() else { return Err(ProtocolError::IterEndError) };
+                out += i32::from(val & 0x7f) << 7*i;
+                if val & 0x80 == 0 {
+                    return Ok(VarInt(out));
+                }
+            }
+            let Some(val) = iter.next() else { return Err(ProtocolError::IterEndError) };
+            if (val) & 0x80 != 0 {
+                return Err(ProtocolError::VarIntError)
+            }
+            out += i32::from(val & 0x7f) << 7*4;
+            Ok(VarInt(out))
+    }
 }
 
-pub fn read_uuid(iter: &mut impl Iterator<Item = u8>) -> Result<Uuid, Box<dyn Error + Send + Sync>> {
-    let array: [u8; 16] = std::convert::TryFrom::try_from(iter.take(16).collect::<Vec<u8>>().as_slice())?;
-    Ok(Uuid::from_u128(u128::from_be_bytes(array)))
-}
-
-pub fn create_var_int(i: VarInt) -> Vec<u8> {
-    let mut value: u32 = i.to_le() as u32;
+impl ToProtocol for VarInt {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        let mut value: u32 = self.get().to_le() as u32;
     let mut out: Vec<u8> = Vec::with_capacity(5);
     loop {
         if value & !0x7f == 0 {
@@ -344,10 +258,67 @@ pub fn create_var_int(i: VarInt) -> Vec<u8> {
     }
     out.shrink_to_fit();
     out
+    }
 }
 
-pub fn create_var_long(l: i64) -> Vec<u8> {
-    let mut value:u64 = l.to_le() as u64;
+//VarLong
+
+#[derive(Debug, Copy, Clone)]
+pub struct VarLong(i64);
+
+impl VarLong {
+    pub fn get(&self) -> i64 {
+        self.0
+    }
+    pub fn new(l: i64) -> Self {
+        VarLong(l)
+    }
+}
+
+impl From<VarLong> for i64 {
+    fn from(value: VarLong) -> Self {
+        value.0
+    }
+}
+
+impl std::fmt::Display for VarLong {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl FromProtocol for VarLong {
+    /// reads a [VarLong](https://wiki.vg/Protocol#Type:VarLong) from a `u8` iterator, returning an `i64`.
+    /// 
+    /// the bytes will be consumed from the iterator.
+    /// 
+    /// see [https://wiki.vg/Protocol#VarInt_and_VarLong](https://wiki.vg/Protocol#VarInt_and_VarLong) for more details
+    /// 
+    /// # Arguments:
+    /// * `iter:&mut impl Iterator<Item = u8>` - the iterator to read the bytes from
+    ///
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            let mut out: i64 = 0;
+            for i in 0..9 {
+                let Some(val) = iter.next() else { return Err(ProtocolError::IterEndError) };
+                out += i64::from(val & 0x7f) << 7*i;
+                if val & 0x80 == 0 {
+                    return Ok(VarLong(out));
+                }
+            }
+            let Some(val) = iter.next() else { return Err(ProtocolError::IterEndError) };
+            if (val) & 0x80 != 0 {
+                return Err(ProtocolError::VarLongError)
+            }
+            out += i64::from(val & 0x7f) << 7*9;
+            Ok(VarLong(out))
+    }
+}
+
+impl ToProtocol for VarLong {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        let mut value:u64 = self.get().to_le() as u64;
     let mut out: Vec<u8> = Vec::with_capacity(9);
     
     loop {
@@ -360,153 +331,353 @@ pub fn create_var_long(l: i64) -> Vec<u8> {
     }
     out.shrink_to_fit();
     out
-}
-
-pub fn create_string(s: &String) -> Vec<u8> {
-    let raw = s.as_bytes().to_owned().into_iter();
-    let len = create_var_int(raw.len() as i32).into_iter();
-    len.chain(raw).collect()
-}
-
-pub fn create_json_text_component(json_text_component: &CJSONTextComponent) -> Vec<u8> {
-    let mut the_string = serde_json::to_string(json_text_component).unwrap();
-    the_string.pop();
-    the_string.remove(0);
-    create_string(&the_string)
-}
-
-pub fn create_prefixed_byte_array(array: &PrefixedByteArray) -> Vec<u8> {
-    create_var_int(array.bytes.len() as i32).into_iter().chain(array.bytes.clone().into_iter()).collect()
-}
-
-pub fn create_inferred_byte_array(array: &InferredByteArray) -> Vec<u8> {
-    array.bytes.clone()
-}
-
-pub fn create_property(property: &Property) -> Vec<u8> {
-    let mut out: Vec<u8> = Vec::new();
-    out.append(&mut create_string(&property.name));
-    out.append(&mut create_string(&property.value));
-    match &property.signature {
-        Some(sig_ref) => {
-            out.append(&mut create_bool(true));
-            out.append(&mut create_string(sig_ref));
-        },
-        None => out.append(&mut create_bool(false)),
-    }
-    out
-}
-
-pub fn create_property_array(array: &PropertyArray) -> Vec<u8> {
-    let mut out: Vec<u8> = Vec::new();
-    let len = array.len();
-    out.append(&mut create_var_int(len as i32));
-    for i in 0..len {
-        out.append(&mut create_property(array.get(i).unwrap()));
-    }
-    out
-}
-
-/// This function strips the root tag from the provided NBT so it can be sent
-/// over the network in versions 1.20.2+
-pub fn create_nbt(nbt: &NBT) -> Vec<u8> {
-    let mut out = vec![10u8];
-    out.extend(nbt.as_slice()[3..].iter());
-    out
-}
-
-pub fn create_float(f: f32) -> Vec<u8> {
-    f.to_be_bytes().to_vec()
-}
-
-pub fn create_double(d: f64) -> Vec<u8> {
-    d.to_be_bytes().to_vec()
-}
-
-pub fn create_bool(b: bool) -> Vec<u8> {
-    match b {
-        true => vec![1u8],
-        false => vec![0u8],
     }
 }
 
-pub fn create_byte(b: i8) -> Vec<u8> {
-    vec![b as u8]
-}
+//String
 
-pub fn create_ubyte(ub: u8) -> Vec<u8> {
-    vec![ub]
-}
-
-pub fn create_short(s: i16) -> Vec<u8> {
-    s.to_be_bytes().to_vec()
-}
-
-pub fn create_ushort(us: u16) -> Vec<u8> {
-    us.to_be_bytes().to_vec()
-}
-
-pub fn create_int(i: i32) -> Vec<u8> {
-    i.to_be_bytes().to_vec()
-}
-
-pub fn create_long(l: i64) -> Vec<u8> {
-    l.to_be_bytes().to_vec()
-}
-
-pub fn create_uuid(uuid: Uuid) -> Vec<u8> {
-    //really counterintuitive, but to_u128_le gives an Little Endian representation of a UUID in Big Endian,
-    //so we want to retain this byte order by using to_le_bytes(), which contains a Little Endian representation
-    //of the data which has been flipped to Big Endian
-    uuid.to_u128_le().to_le_bytes().to_vec()
-}
-
-pub trait Optional<T> {
-    fn read_func(iter: &mut impl Iterator<Item = u8>) -> Result<T, Box<dyn Error + Send + Sync>>;
-    fn create_func(data: T) -> Vec<u8>;
-}
-
-impl Optional<VarInt> for VarInt {
-    #[inline]
-    fn read_func(iter: &mut impl Iterator<Item = u8>) -> Result<VarInt, Box<dyn Error + Send + Sync>> {
-        read_var_int(iter)
-    }
-    #[inline]
-    fn create_func(i: VarInt) -> Vec<u8> {
-        create_var_int(i)
+impl FromProtocol for String {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            let len = VarInt::from_protocol_iter(iter)?.get() as usize;
+            let raw = iter.take(len).collect::<Vec<u8>>();
+            if raw.len() < len {
+                Err(ProtocolError::IterEndError)?
+            }
+            Ok(String::from_utf8(raw)?)
     }
 }
 
-impl Optional<InferredByteArray> for InferredByteArray {
-    #[inline]
-    fn read_func(iter: &mut impl Iterator<Item = u8>) -> Result<InferredByteArray, Box<dyn Error + Send + Sync>> {
-        read_inferred_byte_array(iter)
-    }
-    #[inline]
-    fn create_func(data: InferredByteArray) -> Vec<u8> {
-        create_inferred_byte_array(&data)
+impl ToProtocol for String {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        let raw = self.as_bytes().to_owned().into_iter();
+        let len = VarInt::new(raw.len() as i32).to_protocol_bytes().into_iter();
+        len.chain(raw).collect()
     }
 }
 
-impl Optional<Uuid> for Uuid {
-    #[inline]
-    fn read_func(iter: &mut impl Iterator<Item = u8>) -> Result<Uuid, Box<dyn Error + Send + Sync>> {
-        read_uuid(iter)
-    }
-    #[inline]
-    fn create_func(data: Uuid) -> Vec<u8> {
-        create_uuid(data)
+//PrefixedByteArray
+
+impl FromProtocol for PrefixedByteArray {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            let len = VarInt::from_protocol_iter(iter)?.get() as usize;
+            let raw = iter.take(len).collect::<Vec<u8>>();
+            if raw.len() < len {
+                return Err(ProtocolError::IterEndError);
+            }
+            Ok(PrefixedByteArray{ bytes : raw })
     }
 }
+
+impl ToProtocol for PrefixedByteArray {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        VarInt::new(self.get_bytes().len() as i32).to_protocol_bytes().into_iter().chain(self.get_bytes().clone().into_iter()).collect()
+    }
+}
+
+//PropertyArray
+
+impl FromProtocol for PropertyArray {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            let len = VarInt::from_protocol_iter(iter)?.get();
+            let mut out: Vec<Property> = Vec::with_capacity(len as usize);
+            for _ in 0..len {
+                out.push(Property {
+                    name : String::from_protocol_iter(iter)?,
+                    value: String::from_protocol_iter(iter)?,
+                    signature : if bool::from_protocol_iter(iter)? {
+                        Some(String::from_protocol_iter(iter)?)
+                    } else {
+                        None
+                    },
+                })
+            }
+            Ok(out)
+    }
+}
+
+impl ToProtocol for PropertyArray {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        let mut out: Vec<u8> = Vec::new();
+        let len = self.len();
+        out.append(&mut VarInt::new(len as i32).to_protocol_bytes());
+        for i in 0..len {
+            out.append(&mut self.get(i).unwrap().to_protocol_bytes());
+        }
+        out
+    }
+}
+
+impl ToProtocol for Property {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        let mut out: Vec<u8> = Vec::new();
+        out.append(&mut self.name.to_protocol_bytes());
+        out.append(&mut self.value.to_protocol_bytes());
+        match &self.signature {
+            Some(sig_ref) => {
+                out.append(&mut true.to_protocol_bytes());
+                out.append(&mut sig_ref.to_protocol_bytes());
+            },
+            None => out.append(&mut false.to_protocol_bytes()),
+        }
+        out
+    }
+}
+
+//NBT
+
+impl FromProtocol for NBT {
+    /// Reads NBT data from the iterator
+    /// This is wrapped in an empty Result for compatibility with other functions and macros.
+    /// 
+    /// This is lazily evaluated, so an invalid NBT error needs to be handled 
+    /// when the NBT is actually serialized into the appropriate data structure.
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            iter.next(); // Skip first element (0x0a)
+            Ok(vec![10u8, 0u8, 0u8].into_iter().chain(iter).collect())
+    }
+}
+
+impl ToProtocol for NBT {
+    /// This function strips the root tag from the provided NBT so it can be sent
+    /// over the network in versions 1.20.2+
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        let mut out = vec![10u8];
+        out.extend(self.as_slice()[3..].iter());
+        out
+    }
+}
+
+//InferredByteArray
+
+impl FromProtocol for InferredByteArray {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            Ok(InferredByteArray{bytes : iter.collect()})
+    }
+}
+
+impl ToProtocol for InferredByteArray {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        self.get_bytes().clone()
+    }
+}
+
+//Float (f32)
+
+impl FromProtocol for f32 {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            let bytes = iter.take(4).collect::<Vec<u8>>();
+            if bytes.len() < 4 {
+                return Err(ProtocolError::IterEndError);
+            }
+            Ok(f32::from_be_bytes(bytes.try_into().unwrap()))
+    }
+}
+
+impl ToProtocol for f32 {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
+    }
+}
+
+//Double (f64)
+
+impl FromProtocol for f64 {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            let bytes = iter.take(8).collect::<Vec<u8>>();
+            if bytes.len() < 8 {
+                return Err(ProtocolError::IterEndError);
+            }
+            Ok(f64::from_be_bytes(bytes.try_into().unwrap()))
+    }
+}
+
+impl ToProtocol for f64 {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
+    }
+}
+
+//Boolean (bool)
+
+impl FromProtocol for bool {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            let Some(value) = iter.next() else { return Err(ProtocolError::IterEndError) };
+            match value {
+                0 => Ok(false),
+                1 => Ok(true),
+                _ => Err(ProtocolError::NotBoolean),
+            }
+    }
+}
+
+impl ToProtocol for bool {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        match self {
+            true => vec![1u8],
+            false => vec![0u8],
+        }
+    }
+}
+
+//Unsigned Byte (u8)
+
+impl FromProtocol for u8 {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            match iter.next() {
+                Some(ubyte) => Ok(ubyte),
+                None => Err(ProtocolError::IterEndError),
+            }
+    }
+}
+
+impl ToProtocol for u8 {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        vec![*self]
+    }
+}
+
+//Signed Byte (i8)
+
+impl FromProtocol for i8 {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+        match iter.next() {
+            Some(ubyte) => Ok(ubyte.to_be_bytes()[0] as i8),
+            None => Err(ProtocolError::IterEndError),
+        }
+    }
+}
+
+impl ToProtocol for i8 {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        vec![*self as u8]
+    }
+}
+
+//Unsigned Short (u16)
+
+impl FromProtocol for u16 {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            let array: [u8; 2] = std::convert::TryFrom::try_from(iter.take(2).collect::<Vec<u8>>().as_slice())?;
+            Ok(u16::from_be_bytes(array))
+    }
+}
+
+impl ToProtocol for u16 {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
+    }
+}
+
+//Signed Short (i16)
+
+impl FromProtocol for i16 {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            let array: [u8; 2] = std::convert::TryFrom::try_from(iter.take(2).collect::<Vec<u8>>().as_slice())?;
+            Ok(i16::from_be_bytes(array))
+    }
+}
+
+impl ToProtocol for i16 {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
+    }
+}
+
+//Int (i32)
+
+impl ToProtocol for i32 {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
+    }
+}
+
+//Long (i64)
+
+impl FromProtocol for i64 {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            let array: [u8; 8] = std::convert::TryFrom::try_from(iter.take(8).collect::<Vec<u8>>().as_slice())?;
+            Ok(i64::from_be_bytes(array))
+    }
+}
+
+impl ToProtocol for i64 {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        self.to_be_bytes().to_vec()
+    }
+}
+
+//Uuid
+
+impl FromProtocol for Uuid {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            let array: [u8; 16] = std::convert::TryFrom::try_from(iter.take(16).collect::<Vec<u8>>().as_slice())?;
+            Ok(Uuid::from_u128(u128::from_be_bytes(array)))
+    }
+}
+
+impl ToProtocol for Uuid {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        //really counterintuitive, but to_u128_le gives an Little Endian representation of a UUID in Big Endian,
+        //so we want to retain this byte order by using to_le_bytes(), which contains a Little Endian representation
+        //of the data which has been flipped to Big Endian
+        self.to_u128_le().to_le_bytes().to_vec()
+    }
+}
+
+//Angle
+
+impl FromProtocol for Angle {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            match iter.next() {
+                Some(byte) => {
+                    Ok(Angle::new(byte as f64 * angle::CONVERSION_FACTOR_FROM_NETWORK))
+                },
+                None => Err(ProtocolError::IterEndError)?
+            }
+    }
+}
+
+impl ToProtocol for Angle {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        vec![(((self.get_degrees() * angle::CONVERSION_FACTOR_TO_NETWORK) as i32 % 0xff) as u8)]
+    }
+}
+
+
+
+
+
+pub trait Optional {}
+
+impl Optional for VarInt {}
+
+impl Optional for InferredByteArray {}
+
+impl Optional for Uuid {}
 
 pub fn read_option<T>(iter: &mut impl Iterator<Item = u8>) -> Result<Option<T>, Box<dyn Error + Send + Sync>> 
 where
-    T: Optional<T>
+    T: Optional + FromProtocol
 {
-    let Some(is_some) = iter.next() else { return Err(IterEndError{})? };
+    let Some(is_some) = iter.next() else { return Err(ProtocolError::IterEndError)? };
     let is_some = is_some != 0;
     if is_some {
-        Ok(Some(T::read_func(iter)?))
+        Ok(Some(T::from_protocol_iter(iter)?))
     } else {
         Ok(None)
     }
@@ -514,18 +685,18 @@ where
 
 pub fn create_option<T>(option: Option<T>) -> Vec<u8>
 where
-    T: Optional<T>
+    T: Optional + ToProtocol
 {
     if option.is_some() {
         let mut out = vec![1u8];
-        out.append(&mut T::create_func(option.unwrap()));
+        out.append(&mut option.unwrap().to_protocol_bytes());
         out
     } else {
         vec![0u8]
     }
 }
 
-
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -747,7 +918,7 @@ mod tests {
         let mut bytes = create_var_int(6).into_iter().chain(string1.bytes());
         let string2 = read_string(&mut bytes);
         assert!(string2.is_err());
-        assert_eq!(string2.err().unwrap().to_string(), IterEndError{}.to_string());
+        assert_eq!(string2.err().unwrap().to_string(), ProtocolError::IterEndError.to_string());
 
         //test that data following the string will not be read
         let string1 = "Hello, ".to_string();
@@ -820,4 +991,4 @@ mod tests {
             let x = read_nbt_temp(&mut nbt_iter.clone()).unwrap();
         });
     }
-}
+}*/

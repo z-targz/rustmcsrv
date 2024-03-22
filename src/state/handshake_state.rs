@@ -1,5 +1,3 @@
-use server_util::ConnectionState;
-
 use crate::connection::Connection;
 use crate::packet::SPacket;
 
@@ -22,7 +20,7 @@ pub(in crate) async fn handshake_state(mut connection: Connection) {
                     println!("{addr} > Protocol Version: {}", packet.get_protocol_version());
                     println!("{addr} > Hostname used to connect: {}", packet.get_server_address());
                     println!("{addr} > Port used to connect: {}", packet.get_server_port());
-                    match packet.get_next_state()
+                    match packet.get_next_state().get()
                     {
                         1 => {
                             status_state(connection).await;

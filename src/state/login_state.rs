@@ -13,7 +13,6 @@ use crate::player::Player;
 use crate::state::configuration_state::configuration_state;
 use crate::RUNTIME;
 use crate::THE_SERVER;
-use crate::ONLINE_MODE;
 use crate::connection::Connection;
 use crate::packet::SPacket;
 use crate::packet::login::*;
@@ -163,7 +162,7 @@ async fn get_player_property_array(player_uuid: Uuid) -> PropertyArray {
 }
 
 async fn get_player_uuid(player_name: &String) -> Result<Uuid, Box<dyn Error + Send + Sync>> {
-    if ONLINE_MODE {
+    if THE_SERVER.get_properties().is_online_mode() {
         match reqwest::get(format!("https://api.mojang.com/users/profiles/minecraft/{}", player_name)).await {
             Ok(response) => match response.text().await {
                 Ok(text) => match serde_json::from_str::<APIProfileResponse>(text.as_str()) {

@@ -14,6 +14,7 @@ pub mod handshake;
 pub mod status;
 pub mod login;
 pub mod configuration;
+pub mod play;
 
 pub trait Packet: Sized { 
     fn get_id(&self) -> i32 where Self: Sized;

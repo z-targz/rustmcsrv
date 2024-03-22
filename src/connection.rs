@@ -2,6 +2,7 @@ use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::{Arc, Weak};
 
+use server_util::error::ProtocolError;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
@@ -20,6 +21,7 @@ pub enum ConnectionError {
     PacketCreateError(String),
     Timeout,
     IO(String),
+    ProtocolError(String),
     Other(String),
 }
 
@@ -28,10 +30,11 @@ impl Error for ConnectionError {}
 impl std::fmt::Display for ConnectionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let err_type = match self {
-            ConnectionError::ConnectionClosed => {"Connection Closed.".to_string()}
-            ConnectionError::PacketCreateError(s) => {format!("Error Creating Packet ({s}).")}
-            ConnectionError::Timeout => {"Timed out.".to_string()}
-            ConnectionError::IO(s) => {format!("I/O error ({s}).")},
+            ConnectionError::ConnectionClosed => {"Connection Closed".to_string()}
+            ConnectionError::PacketCreateError(s) => {format!("Error Creating Packet ({s})")}
+            ConnectionError::Timeout => {"Timed out".to_string()}
+            ConnectionError::IO(s) => {format!("I/O error ({s})")},
+            ConnectionError::ProtocolError(s) => {format!("{s}")}
             ConnectionError::Other(s) => {format!("({s})")}
         };
         write!(f, "ConnectionError: {err_type}.")
@@ -41,6 +44,12 @@ impl std::fmt::Display for ConnectionError {
 impl From<Box<dyn Error + Send + Sync>> for ConnectionError {
     fn from(value: Box<dyn Error + Send + Sync>) -> Self {
         ConnectionError::Other(value.to_string())
+    }
+}
+
+impl From<ProtocolError> for ConnectionError {
+    fn from(value: ProtocolError) -> Self {
+        ConnectionError::ProtocolError(value.to_string())
     }
 }
 
@@ -136,7 +145,7 @@ impl Connection {
         
         let mut header_iter = buff.to_vec().into_iter();
 
-        let packet_size_bytes = read_var_int(&mut header_iter)? as usize;
+        let packet_size_bytes = VarInt::from_protocol_iter(&mut header_iter)?.get() as usize;
         println!("Packet size: {packet_size_bytes}");
 
         let header_size = 5 - header_iter.count();
@@ -156,7 +165,7 @@ impl Connection {
         let mut iter = buf.into_iter();
         let _ = iter.advance_by(header_size); //This *might* be the cause of a bug in the future. Keep your eyes peeled.
 
-        let packet_id = read_var_int(&mut iter)?;
+        let packet_id: i32 = VarInt::from_protocol_iter(&mut iter)?.into();
         println!("Packet id: {packet_id}");
 
         println!("Creating packet...");

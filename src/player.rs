@@ -18,7 +18,7 @@ use crate::packet::Clientbound;
 use crate::TIMEOUT;
 use crate::connection::Connection;
 use crate::packet::login::CDisconnect_Login;
-
+use crate::game::gamemode::Gamemode;
 /*
 #[derive(Debug)]
 pub enum PlayerError {
@@ -194,12 +194,7 @@ impl Players {
     }
 }
 
-pub enum Gamemode {
-    Survival,
-    Creative,
-    Adventure,
-    Spectator
-}
+
 
 pub struct PlayerData {
     gamemode: Gamemode,

@@ -51,26 +51,8 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
     let mut assign: String = String::new();
     let mut writes: String = String::new();
 
-    //borrow variable-sized types
-    fn borrow(str: &str) -> &str {
-        match str {
-            "String" => "&",
-            "JSON" => "&",
-            "CJSONTextComponent" => "&",
-            "NBT" => "&",
-            "PrefixedByteArray" => "&",
-            "InferredByteArray" => "&",
-            "PropertyArray" => "&",
-            _ => "",
-        }
-    }
-
     for field in &fields.named {
         let field_name = field.ident.to_token_stream().to_string();
-        
-        let func: &str;
-        let func_string: String;
-
 
         fields_text += field.to_token_stream().to_string().as_str();
         fields_text += ", ";
@@ -80,32 +62,10 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
 
         let field_type = field.ty.to_token_stream().to_string();
         if field_type.starts_with("Option") {
-            func_string = format!("create_option");
-            func = func_string.as_str();
-
-            writes += format!("data.extend({func}({}self.{field_name}));", "").as_str();
+            writes += format!("data.extend(create_option({}self.{field_name}));", "").as_str();
         } else {
-            func = match field_type.as_str() {
-                "String" => "create_string",
-                "JSON" => "create_string",
-                "CJSONTextComponent" => "create_json_text_component",
-                "NBT" => "create_nbt",
-                "VarInt" => "create_var_int",
-                "VarLong" => "create_var_long",
-                "bool" => "create_bool",
-                "u8" => "create_u8",
-                "u16" => "create_ushort",
-                "Uuid" => "create_uuid",
-                "i64" => "create_long",
-                "f32" => "create_float",
-                "f64" => "create_double",
-                
-                "PrefixedByteArray" => "create_prefixed_byte_array",
-                "InferredByteArray" => "create_inferred_byte_array",
-                "PropertyArray" => "create_property_array",
-                _ => panic!("Type not supported"),
-            };
-            writes += format!("data.extend({func}({}self.{field_name}));", borrow(field_type.as_str())).as_str();
+            //writes += format!("data.extend({func}({}self.{field_name}));", borrow(field_type.as_str())).as_str();
+            writes += format!("data.extend(self.{field_name}.to_protocol_bytes().iter());", /*borrow(field_type.as_str())*/).as_str();
         }
     }
 
@@ -127,7 +87,7 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
             fn to_be_bytes(&self) -> Vec<u8> {
                 let mut data: Vec<u8> = Vec::new();
                 #writes
-                let mut out: Vec<u8> = create_var_int(data.len() as i32 + 1);
+                let mut out: Vec<u8> = VarInt::new(data.len() as i32 + 1).to_protocol_bytes();
                 out.push(#id as u8);
                 out.append(&mut data);
                 out
@@ -218,44 +178,18 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
 
         let field_type = field.ty.to_token_stream().to_string();
 
-        let func: &str;
-        let func_string;
-
         if field_type.starts_with("Option") {
             let option_type = extract_T_from_option(&field_type);
-
-            func_string = format!("read_option");
-            func = func_string.as_str();
             
             let b = borrow(option_type.as_str());
             getters += format!("pub fn get_{field_name}(&self) -> Option<{b}{option_type}> {{ self.{field_name}{} }}", if b == "&" {".as_ref()"} else {""}).as_str();
 
-            let_reads += format!("let {field_name}: Option<{option_type}> = {func}(iter)?;").as_str();
+            let_reads += format!("let {field_name}: Option<{option_type}> = read_option(iter)?;").as_str();
         } else {
-            func = match field_type.as_str() {
-                "String" => "read_string",
-                "JSON" => "read_string",
-                "NBT" => "create_nbt",
-                "VarInt" => "read_var_int",
-                "VarLong" => "read_var_long",
-                "bool" => "read_bool",
-                "u8" => "read_ubyte",
-                "u16" => "read_ushort",
-                "Uuid" => "read_uuid",
-                "i64" => "read_long",
-                "f32" => "read_float",
-                "f64" => "read_double",
-                
-                "PrefixedByteArray" => "read_prefixed_byte_array",
-                "InferredByteArray" => "read_inferred_byte_array",
-                "PropertyArray" => "read_property_array",
-                _ => panic!("Type not supported: {field_type}"),
-            };
-
             let b = borrow(field_type.as_str());
             getters += format!("pub fn get_{field_name}(&self) -> {b}{field_type} {{ {b}self.{field_name} }}").as_str();
 
-            let_reads += format!("let {field_name}: {field_type} = {func}(iter)?;").as_str();
+            let_reads += format!("let {field_name}: {field_type} = {field_type}::from_protocol_iter(iter)?;").as_str();
         }
     }
 

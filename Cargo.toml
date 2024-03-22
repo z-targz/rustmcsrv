@@ -23,33 +23,16 @@ cesu8 = "1.1.0"
 serde_path_to_error = "0.1.16"
 lazy_static = "1.4.0"
 
-[dependencies.valence_nbt]
-version = "0.8.0"
-features = [
-    "serde",
-    "java_string",
-    "uuid",
-    "binary",
-]
-
 [dependencies.quartz_nbt]
 version = "0.2.9"
 features = [
     "serde"
 ]
 
-
 [dependencies.serde]
 version = "1.0.197"
 features = [
     "derive"
-]
-
-[dependencies.futures]
-version = "0.3.30"
-features = [
-    "executor",
-    "thread-pool"
 ]
 
 [dependencies.uuid]
@@ -59,10 +42,6 @@ features = [
     "fast-rng",          # Use a faster (but still sufficiently random) RNG
     "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
 ]
-
-#[dependencies.async-std]
-#version = "1.6"
-#features = ["attributes"]
 
 [dependencies.tokio]
 version = "1"

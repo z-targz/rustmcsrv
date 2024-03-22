@@ -159,7 +159,8 @@ mod tests {
         println!("{:?}", serialized);
         println!();
     }
-    #[bench]
+    //Significantly slower
+    /*#[bench]
     fn bench_construct_nbt_valence(bencher: &mut Bencher) {
         match serde_json::de::from_str::<HashMap<String, Registry>>(get_registry().unwrap().to_string().as_str()) {
             Ok(deserialized) => {
@@ -172,8 +173,9 @@ mod tests {
             },
             Err(_) => panic!("JSON was invalid!"),
         };
-    }
+    }*/
 
+    //Significantly faster
     #[bench]
     fn bench_construct_nbt_quartz(bencher: &mut Bencher) {
         match serde_json::de::from_str::<HashMap<String, Registry>>(get_registry().unwrap().to_string().as_str()) {
