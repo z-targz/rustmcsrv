@@ -17,11 +17,13 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 
+use env_logger::Target;
 use tokio::runtime::Runtime;
 use tokio::net::TcpListener;
 
 use lazy_static::lazy_static;
 
+use crate::console::Console;
 use crate::server::server_properties::ServerProperties;
 use crate::server::Server;
 use crate::connection::Connection;
@@ -37,6 +39,7 @@ mod state;
 mod chat;
 mod world;
 mod game;
+mod console;
 
 //const MTU: usize = 1500;
 
@@ -58,9 +61,25 @@ lazy_static!{
 }
 
 
-#[tokio::main]
-async fn main() {
 
+fn main() {
+    //listen for connections
+    //env_logger::Builder::from_default_env().target(CONSOLE.g).init();
+    RUNTIME.spawn(listener());
+
+    //TODO: Start main thread
+    //TODO: Start thread for chat
+    //TODO: Start thread for world
+    //TODO: Start thread for nether
+    //TODO: Start thread for end
+
+
+    //TODO: Handle console input
+}
+
+/// This function spends a ton of time `await`ing for a new connection,
+/// so it should be spawned in a tokio thread
+async fn listener() {
     let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], THE_SERVER.get_properties().get_server_port()))).await.unwrap_or_else(|e| {
         eprintln!("Error: {e}");
         std::process::exit(1);
