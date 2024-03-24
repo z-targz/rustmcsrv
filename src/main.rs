@@ -17,11 +17,13 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 
-use env_logger::Target;
+use console::ConsoleLogger;
+use log::Level;
 use tokio::runtime::Runtime;
 use tokio::net::TcpListener;
 
 use lazy_static::lazy_static;
+use tokio::sync::RwLock;
 
 use crate::console::Console;
 use crate::server::server_properties::ServerProperties;
@@ -33,13 +35,14 @@ use crate::state::handshake_state::handshake_state;
 mod player;
 mod connection;
 mod server;
-mod data;
+mod data_types;
 mod packet;
 mod state;
 mod chat;
 mod world;
 mod game;
 mod console;
+mod entity;
 
 //const MTU: usize = 1500;
 
@@ -57,15 +60,20 @@ lazy_static!{
         std::process::exit(1);
     }));
     pub static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread().enable_time().enable_io().build().unwrap();
-    pub static ref REGISTRY_NBT: Vec<u8> = data::registry::get_registry_nbt().unwrap();
+    pub static ref REGISTRY_NBT: Vec<u8> = data_types::registry::get_registry_nbt().unwrap();
+    pub static ref CONSOLE:RwLock<Console> = RwLock::new(Console::new().unwrap());
 }
 
 
 
+
+
 fn main() {
-    //listen for connections
-    //env_logger::Builder::from_default_env().target(CONSOLE.g).init();
-    RUNTIME.spawn(listener());
+
+    //let mut console: Console = Console::new().unwrap().set_logging_level(Level::Debug);
+
+
+    RUNTIME.spawn(connection_listener());
 
     //TODO: Start main thread
     //TODO: Start thread for chat
@@ -75,11 +83,17 @@ fn main() {
 
 
     //TODO: Handle console input
+
+    std::thread::park();
+}
+
+fn main_thread() {
+
 }
 
 /// This function spends a ton of time `await`ing for a new connection,
 /// so it should be spawned in a tokio thread
-async fn listener() {
+async fn connection_listener() {
     let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], THE_SERVER.get_properties().get_server_port()))).await.unwrap_or_else(|e| {
         eprintln!("Error: {e}");
         std::process::exit(1);

@@ -4,7 +4,7 @@ use super::Packet;
 use server_util::ConnectionState;
 use crate::packet::Serverbound;
 
-use crate::data::*;
+use crate::data_types::*;
 
 use server_macros::SPacket;
 

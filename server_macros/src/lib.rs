@@ -51,6 +51,20 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
     let mut assign: String = String::new();
     let mut writes: String = String::new();
 
+    fn borrow(str: &str) -> &str {
+        match str {
+            "String" => "&",
+            "JSON" => "&",
+            "CJSONTextComponent" => "&",
+            "NBT" => "&",
+            "PrefixedByteArray" => "&",
+            "InferredByteArray" => "&",
+            "PropertyArray" => "&",
+            "DeathLocation" => "&",
+            _ => "",
+        }
+    }
+
     for field in &fields.named {
         let field_name = field.ident.to_token_stream().to_string();
 
@@ -60,9 +74,11 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
         assign += format!("{field_name} : {field_name}, ").as_str();
 
 
+
         let field_type = field.ty.to_token_stream().to_string();
         if field_type.starts_with("Option") {
-            writes += format!("data.extend(create_option({}self.{field_name}));", "").as_str();
+            let option_type = extract_T_from_option(&field_type);
+            writes += format!("data.extend(create_option(self.{field_name}{}));", if borrow(option_type.as_str()) == "&" {".clone()"} else {""}).as_str();
         } else {
             //writes += format!("data.extend({func}({}self.{field_name}));", borrow(field_type.as_str())).as_str();
             writes += format!("data.extend(self.{field_name}.to_protocol_bytes().iter());", /*borrow(field_type.as_str())*/).as_str();
@@ -168,6 +184,7 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
             "PrefixedByteArray" => "&",
             "InferredByteArray" => "&",
             "PropertyArray" => "&",
+            "DeathLocation" => "&",
             _ => "",
         }
     }

@@ -22,7 +22,7 @@ impl Server {
         let max_players = properties.get_max_players();
         Server { 
             properties : properties,
-            players : Players::new(max_players as usize),
+            players : Players::new(max_players),
         }
     }
 
@@ -34,8 +34,8 @@ impl Server {
         self.players.add(player).await
     }
 
-    pub fn get_max_players(&self) -> usize {
-        self.get_properties().get_max_players() as usize
+    pub fn get_max_players(&self) -> i32 {
+        self.get_properties().get_max_players()
     }
 
     pub fn get_motd(&self) -> &String {
@@ -46,7 +46,7 @@ impl Server {
         self.players.players_iter()
     }
 
-    pub fn get_player_by_id(&self, id: usize) -> Option<Weak<Player>> {
+    pub fn get_player_by_id(&self, id: i32) -> Option<Weak<Player>> {
         self.players.get_by_id(id)
     }
 
@@ -58,7 +58,7 @@ impl Server {
         self.players.get_by_name(name)
     }
 
-    pub fn drop_player_by_id(&self, id: usize) {
+    pub fn drop_player_by_id(&self, id: i32) {
         self.players.drop_by_id(id);
     }
 

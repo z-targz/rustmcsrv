@@ -12,7 +12,7 @@ use tokio::time::error::Elapsed;
 use tokio::time::timeout;
 
 use crate::packet::{self, Clientbound, CreatePacketError};
-use crate::{data::*, TIMEOUT};
+use crate::{data_types::*, TIMEOUT};
 use crate::player::Player;
 
 #[derive(Debug)]

@@ -6,9 +6,9 @@ use tokio::time::timeout;
 use uuid::Uuid;
 use serde::Deserialize;
 
-use crate::data::CJSONTextComponent;
-use crate::data::Property;
-use crate::data::PropertyArray;
+use crate::data_types::CJSONTextComponent;
+use crate::data_types::Property;
+use crate::data_types::PropertyArray;
 use crate::player::Player;
 use crate::state::configuration_state::configuration_state;
 use crate::RUNTIME;

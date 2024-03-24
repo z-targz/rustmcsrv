@@ -12,7 +12,20 @@ pub type NBT = Vec<u8>;
 pub mod registry;
 
 pub mod angle;
-use angle::Angle;
+pub mod vec_3d;
+pub mod aabb;
+pub mod identifier;
+pub mod position;
+
+use self::{
+    identifier::Identifier, 
+    vec_3d::Vec3d, 
+    angle::Angle,
+    position::Position,
+};
+
+#[derive(Debug, Copy, Clone)]
+pub struct Rotation(pub Angle, pub Angle);
 
 pub trait ToProtocol {
     fn to_protocol_bytes(&self) -> Vec<u8>;
@@ -658,7 +671,50 @@ impl ToProtocol for Angle {
     }
 }
 
+impl ToProtocol for Identifier {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        self.to_string().to_protocol_bytes()
+    }
+}
 
+impl ToProtocol for Vec<Identifier> {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        self.into_iter().map(|identifier| identifier.to_protocol_bytes()).flatten().collect()
+    }
+}
+
+impl FromProtocol for Position {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            let bytes = iter.take(8).collect::<Vec<u8>>();
+            if bytes.len() < 8 {
+                return Err(ProtocolError::IterEndError);
+            }
+            let val = i64::from_be_bytes(bytes.try_into().unwrap());
+            let x = val >> 38;
+            let y = val & 0xfff;
+            let z = val >> 0xfff & 0x3FFFFFF;
+            Ok(Position::new(x as i32, y as i16, z as i32).unwrap())
+    }
+}
+
+impl ToProtocol for Position {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        (((self.x as i64 & 0x3FFFFFF) << 38) | ((self.z as i64 & 0x3FFFFFF) << 12) | (self.y as i64 & 0xFFF)).to_be_bytes().to_vec()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct DeathLocation {
+    death_dimension: Identifier,
+    death_location: Position,
+}
+
+impl ToProtocol for DeathLocation {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        self.death_dimension.to_protocol_bytes()//todo finish
+    }
+}
 
 
 
@@ -669,6 +725,8 @@ impl Optional for VarInt {}
 impl Optional for InferredByteArray {}
 
 impl Optional for Uuid {}
+
+impl Optional for DeathLocation {}
 
 pub fn read_option<T>(iter: &mut impl Iterator<Item = u8>) -> Result<Option<T>, Box<dyn Error + Send + Sync>> 
 where

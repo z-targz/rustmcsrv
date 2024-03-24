@@ -2,7 +2,7 @@ use std::error::Error;
 
 use super::{Packet, Serverbound, Clientbound};
 
-use crate::data::*;
+use crate::data_types::*;
 
 use server_util::ConnectionState;
 

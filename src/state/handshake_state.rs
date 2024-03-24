@@ -3,6 +3,9 @@ use crate::packet::SPacket;
 
 use super::status_state::status_state;
 use super::login_state::login_state;
+use log::debug;
+use log::info;
+use log::log_enabled;
 
 /// ## Handshake State
 /// 
@@ -16,6 +19,8 @@ pub(in crate) async fn handshake_state(mut connection: Connection) {
         Ok(s_packet) => {
             match s_packet {
                 SPacket::SHandshake(packet) => {
+                    
+
                     println!("{addr} > Handshake Successful!");
                     println!("{addr} > Protocol Version: {}", packet.get_protocol_version());
                     println!("{addr} > Hostname used to connect: {}", packet.get_server_address());

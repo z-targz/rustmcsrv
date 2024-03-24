@@ -1063,6 +1063,7 @@ dependencies = [
  "dashmap",
  "env_logger",
  "lazy_static",
+ "log",
  "md5",
  "quartz_nbt",
  "rayon",

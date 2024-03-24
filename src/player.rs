@@ -11,7 +11,8 @@ use std::sync::Weak;
 use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 use crate::connection::ConnectionError;
-use crate::data::CJSONTextComponent;
+use crate::data_types::CJSONTextComponent;
+use crate::entity::EntityBase;
 use crate::packet;
 use crate::packet::configuration::CDisconnect_Config;
 use crate::packet::Clientbound;
@@ -38,7 +39,8 @@ impl std::fmt::Display for PlayerError {
 }*/
 
 pub struct Player {
-    id: usize,
+    id: i32,
+    eid: i32,
     name: String,
     uuid: Uuid,
     connection: Mutex<Connection>,
@@ -48,7 +50,8 @@ pub struct Player {
 impl<'a> Player {
     pub fn new(name: String, uuid: Uuid, connection: Connection) -> Self {
         Player { 
-            id : usize::MAX, //temp value is changed quickly
+            id : -1, //temp value is changed quickly
+            eid : -1,
             name : name, 
             uuid : uuid, 
             connection : Mutex::new(connection),
@@ -60,11 +63,11 @@ impl<'a> Player {
         &self.connection
     }
 
-    pub(in crate::player) fn set_id(&mut self, id: usize) {
+    pub(in crate::player) fn set_id(&mut self, id: i32) {
         self.id = id;
     }
 
-    pub fn get_id(&self) -> usize {
+    pub fn get_id(&self) -> i32 {
         self.id
     }
 
@@ -99,8 +102,6 @@ impl<'a> Player {
 
     pub async fn disconnect(&self, reason: &str) {
         crate::THE_SERVER.drop_player_by_id(self.id);
-
-        
         let json_text_component = CJSONTextComponent::from_str(reason);
         println!("Raw text component: {}", json_text_component.to_string());
         match timeout(TIMEOUT, self.get_connection_state()).await {
@@ -123,17 +124,45 @@ impl<'a> Player {
     }
 }
 
-//TODO: Move all of this stuff inside server.rs
+impl EntityBase for Player {
+    fn get_eid(&self) -> i32
+        where Self: Sized {
+        todo!()
+    }
+
+    fn get_position(&self) -> crate::data_types::vec_3d::Vec3d
+        where Self: Sized {
+        todo!()
+    }
+
+    fn is_on_fire(&self) -> bool
+        where Self: Sized {
+        todo!()
+    }
+
+    fn get_look(&self) -> crate::data_types::Rotation
+        where Self: Sized {
+        todo!()
+    }
+
+    fn get_world(&self) -> Option<Arc<crate::world::World>>
+        where Self: Sized {
+        todo!()
+    }
+}
+
+
+//TODO (maybe): Move all of this stuff inside server.rs
 ///The struct that holds the players
 pub struct Players {
-    players: DashMap<usize, Arc<Player>>,
-    idx: Mutex<usize>,
+    players: DashMap<i32, Arc<Player>>,
+    idx: Mutex<i32>,
 }
 
 impl Players {
-    pub fn new(max_players: usize) -> Self {
+    pub fn new(max_players: i32) -> Self {
         Players { 
-            players : DashMap::with_capacity(max_players), 
+            players : DashMap::with_capacity(max_players as usize), 
             idx : Mutex::new(0),
         }
     }
@@ -157,14 +186,14 @@ impl Players {
         player_arc
     }
     /// The reference 
-    pub fn get_by_id(&self, id: usize) -> Option<Weak<Player>> {
+    pub fn get_by_id(&self, id: i32) -> Option<Weak<Player>> {
         match self.players.get(&id) {
             Some(player_ref) => Some(Arc::downgrade(&player_ref)),
             None => None
         }
     }
     
-    pub fn drop_by_id(&self, id: usize) {
+    pub fn drop_by_id(&self, id: i32) {
         if self.players.contains_key(&id) {
             self.players.remove(&id);
         }
