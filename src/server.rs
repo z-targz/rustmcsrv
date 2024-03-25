@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::Weak;
 
 use uuid::Uuid;
@@ -15,6 +16,7 @@ pub struct Server {
     properties: ServerProperties,
 
     players: Players,
+    entity_id_cap: Mutex<i32>,
 }
 
 impl Server {
@@ -23,7 +25,16 @@ impl Server {
         Server { 
             properties : properties,
             players : Players::new(max_players),
+            entity_id_cap : Mutex::new(0)
         }
+    }
+
+    pub async fn get_next_eid(&self) -> i32 {
+        let mut block_lock = self.entity_id_cap.lock().unwrap();   
+        let idx_value = *block_lock;
+        *block_lock += 1;
+        drop(block_lock);
+        idx_value
     }
 
     pub fn get_properties(&self) -> &ServerProperties {

@@ -248,7 +248,10 @@ fn impl_packet(ast: &syn::DeriveInput) -> (&syn::Ident, i32, ConnectionState, &s
     let mut state: ConnectionState = ConnectionState::Handshake;
 
     for attr in attributes {
-        let meta_list: &MetaList = attr.meta.require_list().unwrap_or_else(|_| panic!("Missing arguments for {:?}", attr.path().get_ident()));
+        if attr.path().get_ident().to_token_stream().to_string().as_str() == "doc" {
+            continue;
+        }
+        let meta_list: &MetaList = attr.meta.require_list().unwrap_or_else(|_| panic!("Missing arguments for {:?}", attr.path().get_ident().to_token_stream().to_string()));
 
         if attr.path().is_ident("id") {
             let msg = "Argument to id must be a valid positive i32.";

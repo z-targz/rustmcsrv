@@ -1,4 +1,4 @@
-use std::{array::TryFromSliceError, fmt::write, string::FromUtf8Error};
+use std::{array::TryFromSliceError, string::FromUtf8Error};
 
 #[derive(Debug, Clone)]
 pub struct IterEndError;

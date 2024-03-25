@@ -59,8 +59,26 @@ pub struct CLogin_Play {
     previous_game_mode: i8, //probably -1 for this by default
     is_debug: bool, //debug world, this is a special world type, set this to false.
     is_flat: bool, //superflat world yes or no
-    death_location: Option<DeathLocation>
-
+    death_location: Option<DeathLocation>,
+    portal_cooldown: VarInt, //num ticks before player can use portal again. should start at 0
 
     //and many more
+}
+/// Flags (If the value of the byte is masked, it's a relative offset, otherwise it's absolute):
+/// `0x01` - X
+/// `0x02` - Y
+/// `0x04` - Z
+/// `0x08` - Y_ROT (Pitch)
+/// `0x10` - X_ROT (Yaw)
+#[derive(CPacket)]
+#[state(Play)]
+#[id(0x3e)]
+pub struct CSynchronizePlayerPosition {
+    x: f64,
+    y: f64,
+    z: f64,
+    yaw: f32,
+    pitch: f32,
+    flags: u8,
+    teleport_id: VarInt,
 }

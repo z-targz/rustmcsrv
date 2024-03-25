@@ -17,8 +17,8 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 
-use console::ConsoleLogger;
-use log::Level;
+
+use chat::chat_thread;
 use tokio::runtime::Runtime;
 use tokio::net::TcpListener;
 
@@ -33,6 +33,7 @@ use crate::packet::SPacket;
 use crate::state::handshake_state::handshake_state;
 
 mod player;
+mod player_data;
 mod connection;
 mod server;
 mod data_types;
@@ -75,20 +76,32 @@ fn main() {
 
     RUNTIME.spawn(connection_listener());
 
-    //TODO: Start main thread
-    //TODO: Start thread for chat
+    RUNTIME.spawn(chat_thread());
+
+    
     //TODO: Start thread for world
     //TODO: Start thread for nether
     //TODO: Start thread for end
 
+    
+
+    //TODO: Implement channels for this, so that this thread can call the tick method on the world threads.
+    RUNTIME.spawn(scheduler(&true));
 
     //TODO: Handle console input
 
     std::thread::park();
 }
 
-fn main_thread() {
-
+async fn scheduler(_is_running: &bool) {
+    let mut interval = tokio::time::interval(Duration::from_millis(50));
+    loop {
+        interval.tick().await;
+        //Tick each world thread
+        //for world in worlds {
+        //    world.tick();    
+        //}
+    }
 }
 
 /// This function spends a ton of time `await`ing for a new connection,

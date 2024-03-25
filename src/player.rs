@@ -4,6 +4,7 @@ use dashmap::DashMap;
 use server_util::ConnectionState;
 use tokio::time::timeout;
 
+use std::sync::OnceLock;
 //use std::error::Error;
 use std::sync::Arc;
 use std::sync::Weak;
@@ -19,7 +20,7 @@ use crate::packet::Clientbound;
 use crate::TIMEOUT;
 use crate::connection::Connection;
 use crate::packet::login::CDisconnect_Login;
-use crate::game::gamemode::Gamemode;
+use crate::player_data::PlayerData;
 /*
 #[derive(Debug)]
 pub enum PlayerError {
@@ -39,8 +40,8 @@ impl std::fmt::Display for PlayerError {
 }*/
 
 pub struct Player {
-    id: i32,
-    eid: i32,
+    id: OnceLock<i32>,
+    eid: OnceLock<i32>,
     name: String,
     uuid: Uuid,
     connection: Mutex<Connection>,
@@ -50,8 +51,8 @@ pub struct Player {
 impl<'a> Player {
     pub fn new(name: String, uuid: Uuid, connection: Connection) -> Self {
         Player { 
-            id : -1, //temp value is changed quickly
-            eid : -1,
+            id : OnceLock::new(), //temp value is changed quickly
+            eid : OnceLock::new(),
             name : name, 
             uuid : uuid, 
             connection : Mutex::new(connection),
@@ -63,12 +64,17 @@ impl<'a> Player {
         &self.connection
     }
 
-    pub(in crate::player) fn set_id(&mut self, id: i32) {
-        self.id = id;
+    pub(in crate::player) fn set_id(&self, id: i32) -> Result<(), i32> {
+        self.id.set(id)
     }
 
+
+
     pub fn get_id(&self) -> i32 {
-        self.id
+        match self.id.get() {
+            Some(some) => *some,
+            None => -1
+        }
     }
 
     pub async fn set_player_data(&self, data: PlayerData) {
@@ -101,7 +107,12 @@ impl<'a> Player {
     }
 
     pub async fn disconnect(&self, reason: &str) {
-        crate::THE_SERVER.drop_player_by_id(self.id);
+        let player_id : i32;
+        match self.id.get() {
+            Some(some) => player_id = *some,
+            None => return,
+        }
+        crate::THE_SERVER.drop_player_by_id(player_id);
         let json_text_component = CJSONTextComponent::from_str(reason);
         println!("Raw text component: {}", json_text_component.to_string());
         match timeout(TIMEOUT, self.get_connection_state()).await {
@@ -127,7 +138,10 @@ impl<'a> Player {
 impl EntityBase for Player {
     fn get_eid(&self) -> i32
         where Self: Sized {
-        todo!()
+        match self.eid.get() {
+            Some(some) => *some,
+            None => -1,
+        }
     }
 
     fn get_position(&self) -> crate::data_types::vec_3d::Vec3d
@@ -137,7 +151,7 @@ impl EntityBase for Player {
 
     fn is_on_fire(&self) -> bool
         where Self: Sized {
-        todo!()
+        false
     }
 
     fn get_look(&self) -> crate::data_types::Rotation
@@ -145,9 +159,39 @@ impl EntityBase for Player {
         todo!()
     }
 
-    fn get_world(&self) -> Option<Arc<crate::world::World>>
+    fn get_world(&self) -> Option<Weak<crate::world::World>>
         where Self: Sized {
         todo!()
+    }
+    
+    fn is_crouching(&self) -> bool
+        where Self: Sized {
+        false
+    }
+    
+    fn is_sprinting(&self) -> bool
+        where Self: Sized {
+        false
+    }
+    
+    fn is_swimming(&self) -> bool
+        where Self: Sized {
+        false
+    }
+    
+    fn is_invisible(&self) -> bool
+        where Self: Sized {
+        false
+    }
+    
+    fn is_glowing(&self) -> bool
+        where Self: Sized {
+        false
+    }
+    
+    fn is_using_elytra(&self) -> bool
+        where Self: Sized {
+        false
     }
 }
 
@@ -166,12 +210,12 @@ impl Players {
             idx : Mutex::new(0),
         }
     }
-    pub async fn add(&self, mut player: Player) -> Arc<Player>
+    pub async fn add(&self, player: Player) -> Arc<Player>
     {
         let mut idx_lock = self.idx.lock().await;
         let idx_value = *idx_lock;
 
-        player.set_id(idx_value);
+        let _ = player.set_id(idx_value);
         
         let player_arc = Arc::new(player);
 
@@ -226,11 +270,3 @@ impl Players {
 }
 
 
-
-pub struct PlayerData {
-    gamemode: Gamemode,
-}
-
-impl PlayerData {
-
-}
