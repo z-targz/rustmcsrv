@@ -24,7 +24,7 @@ pub struct CPluginMessage_Config {
 #[id(1)]
 #[allow(non_camel_case_types)]
 pub struct CDisconnect_Config {
-    reason: CJSONTextComponent,
+    reason: JSONTextComponent,
 }
 
 #[derive(CPacket)]

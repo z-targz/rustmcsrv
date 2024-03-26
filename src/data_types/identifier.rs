@@ -4,6 +4,8 @@ use serde::ser::{Serialize, Serializer};
 
 use serde::de::{Deserialize, Deserializer, Visitor};
 
+use super::ToProtocol;
+
 #[derive(Debug)]
 pub struct InvalidIdentifier;
 
@@ -19,6 +21,18 @@ impl std::fmt::Display for InvalidIdentifier {
 pub struct Identifier {
     namespace: String,
     thing: String,
+}
+
+impl ToProtocol for Identifier {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        self.to_string().to_protocol_bytes()
+    }
+}
+
+impl ToProtocol for Vec<Identifier> {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        self.into_iter().map(|identifier| identifier.to_protocol_bytes()).flatten().collect()
+    }
 }
 
 impl Serialize for Identifier {

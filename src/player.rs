@@ -12,8 +12,8 @@ use std::sync::Weak;
 use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 use crate::connection::ConnectionError;
-use crate::data_types::CJSONTextComponent;
-use crate::entity::EntityBase;
+use crate::data_types::JSONTextComponent;
+use crate::entity::entity_base::EntityBase;
 use crate::packet;
 use crate::packet::configuration::CDisconnect_Config;
 use crate::packet::Clientbound;
@@ -113,7 +113,7 @@ impl<'a> Player {
             None => return,
         }
         crate::THE_SERVER.drop_player_by_id(player_id);
-        let json_text_component = CJSONTextComponent::from_str(reason);
+        let json_text_component = JSONTextComponent::from_str(reason);
         println!("Raw text component: {}", json_text_component.to_string());
         match timeout(TIMEOUT, self.get_connection_state()).await {
             Ok(connection_state) => match connection_state {

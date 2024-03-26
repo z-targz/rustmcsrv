@@ -1,10 +1,9 @@
-use super::vec_3d::Vec3d;
+use crate::data_types::Vec3d;
 
 #[derive(Debug, Copy, Clone)]
 pub struct BoundingBox {
     max: Vec3d,
     min: Vec3d,
-    
 }
 
 impl BoundingBox {

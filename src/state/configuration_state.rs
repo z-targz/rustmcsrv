@@ -10,6 +10,7 @@ use crate::player::Player;
 use crate::state::play_state::play_state;
 use crate::SPacket;
 
+
 pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
     let mut lock = player_ref.get_connection().lock().await;
     lock.set_connection_state(ConnectionState::Configuration).await;

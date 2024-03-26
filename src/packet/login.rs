@@ -15,7 +15,7 @@ use server_macros::SPacket;
 #[id(0)]
 #[allow(non_camel_case_types)]
 pub struct CDisconnect_Login {
-    reason: CJSONTextComponent,
+    reason: JSONTextComponent,
 }
 
 #[derive(CPacket)]

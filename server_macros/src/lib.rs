@@ -55,7 +55,7 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
         match str {
             "String" => "&",
             "JSON" => "&",
-            "CJSONTextComponent" => "&",
+            "JSONTextComponent" => "&",
             "NBT" => "&",
             "PrefixedByteArray" => "&",
             "InferredByteArray" => "&",
@@ -179,7 +179,7 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
         match str {
             "String" => "&",
             "JSON" => "&",
-            "CJSONTextComponent" => "&",
+            "JSONTextComponent" => "&",
             "NBT" => "&",
             "PrefixedByteArray" => "&",
             "InferredByteArray" => "&",

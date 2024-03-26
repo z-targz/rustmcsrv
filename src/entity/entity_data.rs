@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 
-use crate::data_types::{identifier::Identifier, CJSONTextComponent};
+use crate::data_types::{identifier::Identifier, JSONTextComponent};
 
 
 
@@ -12,7 +12,7 @@ use crate::data_types::{identifier::Identifier, CJSONTextComponent};
 pub struct EntityData {
     Air: i32,
     #[serde(skip_serializing_if = "Option::is_none")]
-    CustomName: Option<CJSONTextComponent>,
+    CustomName: Option<JSONTextComponent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     CustomNameVisible: Option<bool>,
     FallDistance: f32,
@@ -73,7 +73,7 @@ impl EntityData {
         self.Air = air;
     }
 
-    pub fn set_CustomName(mut self, custom_name: Option<CJSONTextComponent>) {
+    pub fn set_CustomName(mut self, custom_name: Option<JSONTextComponent>) {
         self.CustomName = custom_name;
     }
 

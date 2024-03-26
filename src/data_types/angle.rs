@@ -1,5 +1,9 @@
 use std::ops;
 
+use server_util::error::ProtocolError;
+
+use super::{FromProtocol, ToProtocol};
+
 pub const CONVERSION_FACTOR_TO_NETWORK: f64 = 256.0 / 360.0;
 pub const CONVERSION_FACTOR_FROM_NETWORK: f64 = 360.0 / 256.0;
 
@@ -17,6 +21,25 @@ impl Angle {
     }
     pub fn set_degrees(&mut self, degrees_new: f64) {
         self.degrees = degrees_new % 360.0;
+    }
+}
+
+impl FromProtocol for Angle {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized 
+    {
+        match iter.next() {
+            Some(byte) => {
+                Ok(Angle::new(byte as f64 * CONVERSION_FACTOR_FROM_NETWORK))
+            },
+            None => Err(ProtocolError::IterEndError)?
+        }
+    }
+}
+
+impl ToProtocol for Angle {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        vec![(((self.get_degrees() * CONVERSION_FACTOR_TO_NETWORK) as i32 % 0xff) as u8)]
     }
 }
 

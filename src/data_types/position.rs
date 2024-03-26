@@ -1,5 +1,9 @@
 use std::error::Error;
 
+use server_util::error::ProtocolError;
+
+use super::{FromProtocol, ToProtocol};
+
 #[derive(Debug)]
 pub enum InvalidPositionError {
     XTooBig,
@@ -53,5 +57,27 @@ impl Position {
             y : y,
             z : z
         })
+    }
+}
+
+impl FromProtocol for Position {
+    fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
+        where Self: Sized {
+            let bytes = iter.take(8).collect::<Vec<u8>>();
+            if bytes.len() < 8 {
+                return Err(ProtocolError::IterEndError);
+            }
+            let val = u64::from_be_bytes(bytes.try_into().unwrap());
+            let fff: u64 = 0xfff;
+            let x = val >> 38;
+            let y = val & fff;
+            let z = (val & 0x3FFFFFF) << 12;
+            Ok(Position::new(x as i32, y as i16, z as i32).unwrap())
+    }
+}
+
+impl ToProtocol for Position {
+    fn to_protocol_bytes(&self) -> Vec<u8> {
+        (((self.x as i64 & 0x3FFFFFF) << 38) | ((self.z as i64 & 0x3FFFFFF) << 12) | (self.y as i64 & 0xFFF)).to_be_bytes().to_vec()
     }
 }

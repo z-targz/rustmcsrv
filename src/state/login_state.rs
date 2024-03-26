@@ -6,7 +6,7 @@ use tokio::time::timeout;
 use uuid::Uuid;
 use serde::Deserialize;
 
-use crate::data_types::CJSONTextComponent;
+use crate::data_types::JSONTextComponent;
 use crate::data_types::Property;
 use crate::data_types::PropertyArray;
 use crate::player::Player;
@@ -59,7 +59,7 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
                         Err(_) => {
                             RUNTIME.spawn(async move {
                                 //TODO: move the timeout into the send packet function
-                                let _ = connection.send_packet(CDisconnect_Login::new(CJSONTextComponent::from_str("§4Mojang API appears to be down :("))).await;
+                                let _ = connection.send_packet(CDisconnect_Login::new(JSONTextComponent::from_str("§4Mojang API appears to be down :("))).await;
                             });
                             return;
                         }
