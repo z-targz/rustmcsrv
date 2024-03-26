@@ -6,7 +6,6 @@ use tokio::time::timeout;
 use uuid::Uuid;
 use serde::Deserialize;
 
-use crate::data_types::JSONTextComponent;
 use crate::data_types::Property;
 use crate::data_types::PropertyArray;
 use crate::player::Player;
@@ -59,7 +58,7 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
                         Err(_) => {
                             RUNTIME.spawn(async move {
                                 //TODO: move the timeout into the send packet function
-                                let _ = connection.send_packet(CDisconnect_Login::new(JSONTextComponent::from_str("§4Mojang API appears to be down :("))).await;
+                                let _ = connection.send_packet(CDisconnect_Login::new("§4Mojang API appears to be down :(".to_string())).await;
                             });
                             return;
                         }
@@ -94,6 +93,7 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
     }
     //TODO: Everything in between
 
+
     println!("Sending CLoginSuccess...");
     match player_ref.send_packet(CLoginSuccess::new(
         player_ref.get_uuid(), 
@@ -102,7 +102,7 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
     )).await {
         Ok(_) => (),
         Err(_) => {
-            player_ref.disconnect(&"Connection closed.".to_string()).await;
+            player_ref.disconnect("Connection closed.").await;
             return;
         }
     }
@@ -112,12 +112,12 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
         Ok(s_packet) => match s_packet {
             SPacket::SLoginAcknowledged(_) => (),
             _ => {
-                player_ref.disconnect(&"Incorrect packet.".to_string()).await;
+                player_ref.disconnect("Incorrect packet.").await;
                 return;
             }
         },
         Err(_) => {
-            player_ref.disconnect(&"Invalid packet.".to_string()).await;
+            player_ref.disconnect("Invalid packet.").await;
             return;
         }
     };

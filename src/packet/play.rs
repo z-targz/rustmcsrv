@@ -5,9 +5,7 @@ use super::{Packet, Serverbound, Clientbound};
 use server_util::ConnectionState;
 
 use crate::data_types::*;
-use crate::data_types::angle::Angle;
-use crate::data_types::vec_3d::Vec3d;
-use crate::data_types::identifier::Identifier;
+
 use uuid::Uuid;
 
 use server_macros::CPacket;
@@ -35,6 +33,14 @@ pub struct CSpawnEntity {
     velocity_x: i16,
     velocity_y: i16,
     velocity_z: i16,
+}
+
+#[derive(CPacket)]
+#[state(Play)]
+#[id(0x1b)]
+#[allow(non_camel_case_types)]
+pub struct CDisconnect_Play {
+    reason: TextComponent,
 }
 
 #[derive(CPacket)]

@@ -3,9 +3,6 @@ use crate::packet::SPacket;
 
 use super::status_state::status_state;
 use super::login_state::login_state;
-use log::debug;
-use log::info;
-use log::log_enabled;
 
 /// ## Handshake State
 /// 

@@ -23,14 +23,11 @@ pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
     //TODO: Clientbound plugin message
     //TODO: Feature Flags
 
-    //TODO: Handle these packets accordingly.
-    match filter_packets_until_s_acknowledge_finish_config(player_ref.clone()).await {
-        Ok(_) => (),
-        Err(e) => {
-            player_ref.disconnect(e.to_string().as_str()).await;
-            return;
-        }
-    }
+    
+
+
+
+    println!("sending registry data");
 
     match player_ref.send_packet(CRegistryData::new()).await {
         Ok(_) => (),
@@ -39,8 +36,19 @@ pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
             return;
         },
     }
+    println!("Sent registry data");
+    
     //TODO: Update Tags
     match player_ref.send_packet(CFinishConfig::new()).await {
+        Ok(_) => (),
+        Err(e) => {
+            player_ref.disconnect(e.to_string().as_str()).await;
+            return;
+        }
+    }
+
+    //TODO: Handle these packets accordingly.
+    match filter_packets_until_s_acknowledge_finish_config(player_ref.clone()).await {
         Ok(_) => (),
         Err(e) => {
             player_ref.disconnect(e.to_string().as_str()).await;
@@ -56,11 +64,14 @@ pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
 async fn filter_packets_until_s_acknowledge_finish_config(player_ref: Arc<Player>) -> Result<(), Box<dyn Error + Send + Sync>> {
     for _ in 0..3 {
         match player_ref.read_next_packet().await {
-            Ok(packet) => match packet {
-                SPacket::SPluginMessage_Config(_) => continue,
-                SPacket::SClientInformation_Config(_) => continue,
-                SPacket::SAcknowledgeFinishConfig(_) => return Ok(()),
-                _ => return Err(format!("Wrong packet: {:?}!", packet))?
+            Ok(packet) => {
+                println!("Found packet: {:?}", packet);
+                match packet {
+                    SPacket::SPluginMessage_Config(_) => continue,
+                    SPacket::SClientInformation_Config(_) => continue,
+                    SPacket::SAcknowledgeFinishConfig(_) => return Ok(()),
+                    _ => return Err(format!("Wrong packet: {:?}!", packet))?
+                }
             }
             Err(e) => return Err(Box::new(e)),
         }

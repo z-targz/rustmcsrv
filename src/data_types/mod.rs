@@ -18,6 +18,7 @@ pub mod identifier;
 pub mod position;
 pub mod death_location;
 pub mod json_text_component;
+pub mod text_component;
 pub mod prefixed_byte_array;
 pub mod inferred_byte_array;
 pub mod property_array;
@@ -35,6 +36,7 @@ pub use {
     position::Position,
     death_location::DeathLocation,
     json_text_component::JSONTextComponent,
+    text_component::TextComponent,
     prefixed_byte_array::PrefixedByteArray,
     inferred_byte_array::InferredByteArray,
     property_array::Property,

@@ -8,7 +8,7 @@ pub struct JSONTextComponent {
     text: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    translatable: Option<String>,
+    translate: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     keybind: Option<String>,
@@ -36,7 +36,7 @@ pub struct JSONTextComponent {
 impl JSONTextComponent {
     pub fn new(
             text: Option<String>, 
-            translatable: Option<String>, 
+            translate: Option<String>, 
             keybind: Option<String>, 
             color: Option<String>, 
             bold: Option<bool>,
@@ -47,7 +47,7 @@ impl JSONTextComponent {
         ) -> Self {
         JSONTextComponent {
             text : text,
-            translatable : translatable,
+            translate : translate,
             keybind : keybind,
             color : color,
             bold : bold,
