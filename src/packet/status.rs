@@ -25,14 +25,12 @@ pub struct CPingResponse_Status {
     payload: i64,
 }
 
-#[derive(Debug)]
-#[derive(SPacket)]
+#[derive(SPacket, Debug)]
 #[state(Status)]
 #[id(0)]
 pub struct SStatusRequest { }
 
-#[derive(Debug)]
-#[derive(SPacket)]
+#[derive(SPacket, Debug)]
 #[state(Status)]
 #[id(1)]
 #[allow(non_camel_case_types)]

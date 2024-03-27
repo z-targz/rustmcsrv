@@ -2,9 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use super::{ToProtocol, NBT};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct TextComponent {
-    is_text_only: bool,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     text: Option<String>,
@@ -76,24 +75,13 @@ pub enum Contents {
 
 
 impl TextComponent {
-    pub fn new(text: &str) -> Self {
-        TextComponent {
-            is_text_only: true,
-            text : Some(text.to_string()),
-            translatable : None,
-            keybind : None,
-            color : None,
-            bold : None,
-            italic : None,
-            underlined : None,
-            strikethrough : None,
-            obfuscated : None,
-            extra : None,
-        }
+    pub fn from_str(text: &str) -> Self {
+        let mut out = TextComponent::default();
+        out.text = Some(text.to_string());
+        out
     }
 
     pub fn color(mut self, hex_code: u8) -> Self {
-        self.is_text_only = false;
         assert!(hex_code <= 0xf);
         let color = match hex_code {
             0x0 => "black",
@@ -119,7 +107,6 @@ impl TextComponent {
     }
 
     pub fn color_hex(mut self, color: u32) -> Self {
-        self.is_text_only = false;
         if color > 0xffffff { panic!("color must be a 24 bit unsigned integer") }
         self.color = Some(format!("#{color:x}"));
         self
@@ -186,3 +173,4 @@ impl ToProtocol for TextComponent {
         the_nbt.to_protocol_bytes()
     }
 }
+

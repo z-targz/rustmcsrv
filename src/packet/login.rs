@@ -53,8 +53,7 @@ pub struct CPluginRequest_Login {
     data: InferredByteArray,
 }
 
-#[derive(Debug)]
-#[derive(SPacket)]
+#[derive(SPacket, Debug)]
 #[state(Login)]
 #[id(0)]
 pub struct SLoginStart {
@@ -62,8 +61,7 @@ pub struct SLoginStart {
     uuid: Uuid, //Unused
 }
 
-#[derive(Debug)]
-#[derive(SPacket)]
+#[derive(SPacket, Debug)]
 #[state(Login)]
 #[id(1)]
 #[allow(unused)]
@@ -72,8 +70,7 @@ pub struct SEncryptionResponse {
     verify_token: PrefixedByteArray,
 }
 
-#[derive(Debug)]
-#[derive(SPacket)]
+#[derive(SPacket, Debug)]
 #[state(Login)]
 #[id(2)]
 #[allow(unused)]
@@ -82,8 +79,7 @@ pub struct SLoginPluginResponse {
     data: Option<InferredByteArray>,
 }
 
-#[derive(Debug)]
-#[derive(SPacket)]
+#[derive(SPacket, Debug)]
 #[state(Login)]
 #[id(3)]
 pub struct SLoginAcknowledged { }

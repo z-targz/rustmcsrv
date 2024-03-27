@@ -88,3 +88,10 @@ pub struct CSynchronizePlayerPosition {
     flags: u8,
     teleport_id: VarInt,
 }
+
+#[derive(SPacket, Debug)]
+#[state(Play)]
+#[id(0x00)]
+pub struct SConfirmTeleportation {
+    teleport_id: VarInt,
+}

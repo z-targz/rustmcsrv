@@ -92,8 +92,7 @@ pub struct CAddResourcePack_Config {
 
 //TODO: ID 8: https://wiki.vg/Protocol#Feature_Flags
 
-#[derive(Debug)]
-#[derive(SPacket)]
+#[derive(SPacket, Debug)]
 #[state(Configuration)]
 #[id(0)]
 #[allow(non_camel_case_types)]
@@ -108,8 +107,7 @@ pub struct SClientInformation_Config {
     allow_server_listings: bool,
 }
 
-#[derive(Debug)]
-#[derive(SPacket)]
+#[derive(SPacket, Debug)]
 #[state(Configuration)]
 #[id(1)]
 #[allow(non_camel_case_types)]
@@ -118,14 +116,12 @@ pub struct SPluginMessage_Config {
 
 }
 
-#[derive(Debug)]
-#[derive(SPacket)]
+#[derive(SPacket, Debug)]
 #[state(Configuration)]
 #[id(2)]
 pub struct SAcknowledgeFinishConfig {}
 
-#[derive(Debug)]
-#[derive(SPacket)]
+#[derive(SPacket, Debug)]
 #[state(Configuration)]
 #[id(3)]
 #[allow(non_camel_case_types)]

@@ -69,8 +69,6 @@ impl<'a> Player {
         self.id.set(id)
     }
 
-
-
     pub fn get_id(&self) -> i32 {
         match self.id.get() {
             Some(some) => *some,
@@ -108,7 +106,7 @@ impl<'a> Player {
     }
 
     pub async fn disconnect(&self, reason: &str) {
-        self.disconnect_tc(TextComponent::new(reason)).await
+        self.disconnect_tc(TextComponent::from_str(reason)).await
     }
 
     pub async fn disconnect_tc(&self, reason: TextComponent) {

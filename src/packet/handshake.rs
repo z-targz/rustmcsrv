@@ -8,8 +8,7 @@ use crate::data_types::*;
 
 use server_macros::SPacket;
 
-#[derive(Debug)]
-#[derive(SPacket)]
+#[derive(SPacket, Debug)]
 #[state(Handshake)]
 #[id(0)]
 pub struct SHandshake {

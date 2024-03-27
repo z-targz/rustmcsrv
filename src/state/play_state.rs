@@ -10,12 +10,12 @@ pub(in crate::state) async fn play_state(player_ref: Arc<Player>) {
     drop(lock);
     println!("Made it to the play state!");
 
-    let disconnect_reason = TextComponent::new("#")
+    let disconnect_reason = TextComponent::from_str("#")
     .obfuscated().color(4u8)
-    .add_extra(&TextComponent::new(" Test :3 ")
+    .add_extra(&TextComponent::from_str(" Test :3 ")
         .reset_fmt()
         .color_hex(0xdd33dd))
-    .add_extra(&TextComponent::new("#").obfuscated().color(0x4u8));
+    .add_extra(&TextComponent::from_str("#").obfuscated().color(0x4u8));
     println!("tc: {:?}", disconnect_reason);
     player_ref.disconnect_tc(disconnect_reason).await;
 }
