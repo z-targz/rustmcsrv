@@ -2,6 +2,7 @@ use std::error::Error;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, SystemTime};
 
+use log::debug;
 use server_util::ConnectionState;
 use tokio::time;
 
@@ -12,11 +13,11 @@ use crate::SPacket;
 
 
 pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
-    let mut lock = player_ref.get_connection().lock().await;
+    let mut lock = player_ref.get_connection().write().await;
     lock.set_connection_state(ConnectionState::Configuration).await;
     drop(lock);
 
-    println!("Made it to the configuration state!");
+    debug!("Made it to the configuration state!");
     keep_alive(Arc::downgrade(&player_ref));
     //TODO: Handle plugin message.
     //TODO: Handle Client Information.
@@ -27,7 +28,7 @@ pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
 
 
 
-    println!("sending registry data");
+    debug!("sending registry data");
 
     match player_ref.send_packet(CRegistryData::new()).await {
         Ok(_) => (),
@@ -36,7 +37,7 @@ pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
             return;
         },
     }
-    println!("Sent registry data");
+    debug!("Sent registry data");
     
     //TODO: Update Tags
     match player_ref.send_packet(CFinishConfig::new()).await {
@@ -56,8 +57,8 @@ pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
         }
     }
     
-    println!("Received SAcknowledgeFinishConfig!");
-    println!("Switching to play state...");
+    debug!("Received SAcknowledgeFinishConfig!");
+    debug!("Switching to play state...");
     play_state(player_ref).await;
 }
 
@@ -90,7 +91,7 @@ fn keep_alive(weak: Weak<Player>) {
                     match player.get_connection_state().await {
                         ConnectionState::Configuration => {
                             //potential BUG: Client might not immediately send the keep alive packet
-                            let mut lock = player.get_connection().lock().await;
+                            let lock = player.get_connection().write().await;
                             let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
                             match time::timeout(crate::TIMEOUT, lock.send_packet(CKeepAlive_Config::new(time))).await {
                                 Ok(_) => {

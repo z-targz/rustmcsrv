@@ -2,12 +2,14 @@ use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::{Arc, Weak};
 
+use log::{debug, trace};
 use server_util::error::ProtocolError;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 
 use server_util::ConnectionState;
+use tokio::sync::Mutex;
 use tokio::time::error::Elapsed;
 use tokio::time::timeout;
 
@@ -72,8 +74,8 @@ impl From<tokio::io::Error> for ConnectionError {
 }
 
 pub struct Connection {
-    read: OwnedReadHalf,
-    write: OwnedWriteHalf,
+    read: Mutex<OwnedReadHalf>,
+    write: Mutex<OwnedWriteHalf>,
     state: ConnectionState,
     compressed: bool,
     addr: SocketAddr,
@@ -83,7 +85,7 @@ pub struct Connection {
 impl Connection {
     pub fn new(stream: TcpStream, addr: SocketAddr) -> Self {
         let (read, write) = stream.into_split();
-        Connection {read : read, write : write, state : ConnectionState::Handshake, compressed: false, addr : addr, owner : None }
+        Connection {read : Mutex::new(read), write : Mutex::new(write), state : ConnectionState::Handshake, compressed: false, addr : addr, owner : None }
     }
 
     pub fn set_owner(&mut self, owner: Arc<Player>) {
@@ -118,12 +120,12 @@ impl Connection {
         self.state
     } //lock is dropped
 
-    pub fn drop(&mut self) {
-        let _ = self.write.shutdown();
+    pub async fn drop(&mut self) {
+        let _ = tokio::time::timeout(crate::TIMEOUT * 3, self.write.lock().await.shutdown());
     }
 
-    pub async fn send_packet(&mut self, packet: impl Clientbound) -> Result<(), ConnectionError> {
-        match timeout(TIMEOUT, self.write.write_all(packet.to_be_bytes().as_slice())).await {
+    pub async fn send_packet(&self, packet: impl Clientbound) -> Result<(), ConnectionError> {
+        match timeout(TIMEOUT, self.write.lock().await.write_all(packet.to_be_bytes().as_slice())).await {
             Ok(result) => match result {
                 Ok(_) => Ok(()),
                 Err(e) => Err(e)?
@@ -132,43 +134,44 @@ impl Connection {
         }
     }
 
-    pub async fn read_next_packet(&mut self) -> Result<packet::SPacket, ConnectionError> {
+    pub async fn read_next_packet(&self) -> Result<packet::SPacket, ConnectionError> {
         let mut buff: [u8; 5] = [0u8; 5];
-        //let mut socket_ro_peek = timeout(TIMEOUT, self.read.lock()).await?;
-        let num_bytes = self.read.peek(&mut buff).await;
+        let mut socket_ro = self.read.lock().await;
+        let num_bytes = socket_ro.peek(&mut buff).await;
         match num_bytes {
             Ok(0) => return Err(ConnectionError::ConnectionClosed)?,
             Err(_) => return Err(ConnectionError::ConnectionClosed)?,
             _ => ()
         }
-        println!("Raw packet data (first 10): {:?}", buff);
+        trace!("Raw packet data (first 10): {:?}", buff);
         
         let mut header_iter = buff.to_vec().into_iter();
 
         let packet_size_bytes = VarInt::from_protocol_iter(&mut header_iter)?.get() as usize;
-        println!("Packet size: {packet_size_bytes}");
+        trace!("Packet size: {packet_size_bytes}");
 
         let header_size = 5 - header_iter.count();
 
-        println!("Reading packet data...");
+        trace!("Reading packet data...");
         let mut buf = Box::new(Vec::with_capacity(packet_size_bytes));
         buf.resize(header_size + packet_size_bytes, 0u8);
 
-        let Ok(bytes) = timeout(TIMEOUT, self.read.read_exact(buf.as_mut_slice())).await? else {return Err(ConnectionError::ConnectionClosed)?};
-        println!("Read {bytes} bytes.");
+        let Ok(bytes) = timeout(TIMEOUT, socket_ro.read_exact(buf.as_mut_slice())).await? else {return Err(ConnectionError::ConnectionClosed)?};
+        drop(socket_ro);
+        trace!("Read {bytes} bytes.");
         match bytes {
             0=> return Err(ConnectionError::ConnectionClosed)?,
             _=>()
         }
-        println!("Packet data: {:?}.", buf);
+        trace!("Packet data: {:?}.", buf);
 
         let mut iter = buf.into_iter();
         let _ = iter.advance_by(header_size); //This *might* be the cause of a bug in the future. Keep your eyes peeled.
 
         let packet_id: i32 = VarInt::from_protocol_iter(&mut iter)?.into();
-        println!("Packet id: {packet_id}");
+        trace!("Packet id: {packet_id}");
 
-        println!("Creating packet...");
+        trace!("Creating packet...");
         Ok(packet::create_packet(packet_id, self.state, &mut iter)?)
         //drop(lock)
     }
@@ -182,7 +185,7 @@ impl Drop for Connection {
                 Some(parent) => {
                     crate::THE_SERVER.drop_player_by_id(parent.get_id());
                     let name = parent.get_name();
-                    println!("Dropped player: {name}");
+                    debug!("Dropped player: {name}");
                 },
                 None => ()
             },

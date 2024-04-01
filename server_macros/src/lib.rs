@@ -18,6 +18,7 @@ use syn::parse_macro_input;
 use syn::LitStr;
 
 use server_util::ConnectionState;
+use server_util::PropertyType;
 
 use base64::prelude::*;
 
@@ -29,6 +30,8 @@ lazy_static!{
     static ref LOGIN_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
     static ref CONFIGURATION_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
     static ref PLAY_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
+
+    static ref PROPERTY_TYPES: Mutex<HashMap<String, PropertyType>> = Mutex::new(HashMap::new());
 }
 
 #[proc_macro_derive(CPacket, attributes(state, id))]
@@ -469,3 +472,113 @@ pub fn create_play_packets(_: TokenStream) -> TokenStream {
         }
     }.into()
 }
+
+#[proc_macro_derive(ServerPropertiesDerive)]
+pub fn create_property_types(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+    impl_create_property_types(&ast)
+}
+
+fn impl_create_property_types(ast: &syn::DeriveInput) -> TokenStream {
+    let name = &ast.ident;
+    let fields = match &ast.data {
+        Data::Struct(DataStruct{ fields: Fields::Named(it), struct_token : _, semi_token : _ }) => it,
+        Data::Struct(_) => panic!("Expected a `struct` with named fields."),
+        Data::Enum(_) | Data::Union(_) => panic!("#[Derive(CPacket)] is only implemented for `struct`s."),
+    };
+
+    let mut out_quote = quote!{};
+    for field in &fields.named {
+        let field_name1 = field.ident.to_token_stream().to_string();
+        let field_name2 = field_name1.replace("_", "-");
+        let field_name = field_name2.as_str();
+        
+        let field_name_token_stream: proc_macro2::TokenStream = field_name1.parse().unwrap();
+        let field_type1 = field.ty.to_token_stream().to_string();
+        let field_type: proc_macro2::TokenStream = field_type1.parse().unwrap();
+
+        let optional = field_type1.starts_with("Option");
+
+        let empty_str_result: proc_macro2::TokenStream = if optional {
+            quote!{server_properties.#field_name_token_stream = None}
+        } else {
+            quote!{return Err(LoadPropertiesError::PropertyCannotBeNone(#field_name2.to_string(), i))}
+        }.into();
+
+        out_quote.extend(quote!{
+            #field_name => {
+                match tuple.1 {
+                    "" => #empty_str_result,
+                    some => {
+                        match some.parse::<#field_type>() {
+                            Ok(x) => {
+                                server_properties.#field_name_token_stream = x;
+                            },
+                            Err(_) => {
+                                return Err(LoadPropertiesError::InvalidValueForProperty(tuple.0.to_string(), i));
+                            }
+                        }
+                    },
+                }
+            },
+        }.into_iter());
+    }
+    quote!{
+
+        impl #name {
+
+            /// Loads the server properties from the file server.properties in the
+            /// main directory.
+            /// 
+            /// TODO: replace this with a custom serde implementation
+            /// 
+            /// Desired functionality for the serde implementation:
+            ///
+            /// 1. creates the default ServerProperties
+            /// 2. deserializes server.properties from field-name=value to field_name = value 
+            ///    into the created ServerProperties
+            /// 3. serializes the createdServerProperties to server.properties to populate 
+            ///    missing properties
+            pub fn load_server_properties() -> Result<ServerProperties, LoadPropertiesError> {
+                if !Path::new("server.properties").exists() {
+                    let mut file = File::create("server.properties")?;
+                    match ServerProperties::default().write_to_file(&mut file) {
+                        Ok(_) => (),
+                        Err(e) => return Err(LoadPropertiesError::IOError(e.to_string())),
+                    }
+                };
+
+                let reader = BufReader::new(OpenOptions::new().read(true).open("server.properties")?);
+                let mut server_properties = ServerProperties::default();
+                let mut i = 0;
+                for result in reader.lines() {
+                    i += 1;
+                    match result {
+                        Ok(line) => {
+                            if line.starts_with("#") { continue; }
+
+                            let pair = line.split("=").collect::<Vec<_>>();
+
+                            if pair.len() != 2 {
+                                return Err(LoadPropertiesError::MalformedLine(i));
+                            }
+                            let tuple: (&str, &str) = (pair.get(0).unwrap(), pair.get(1).unwrap());
+                            match tuple.0 {
+                                #out_quote
+                                _ => return Err(LoadPropertiesError::InvalidProperty(pair.get(0).unwrap().to_string(), i)),
+                            }
+                        },
+                        Err(e) => return Err(e)?,
+                    }
+                }
+                let mut writer = BufWriter::new(OpenOptions::new().read(true).write(true).truncate(true).open("server.properties")?);
+                match server_properties.write_to_file(&mut writer) {
+                    Ok(_) => (),
+                    Err(e) => return Err(LoadPropertiesError::IOError(e.to_string())),
+                }
+                Ok(server_properties)
+            }
+        }
+    }.into()
+}
+

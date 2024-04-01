@@ -3,6 +3,8 @@ use uuid::Uuid;
 
 use super::{Optional, VarInt};
 
+pub type JSON = String;
+
 pub trait ToProtocol {
     fn to_protocol_bytes(&self) -> Vec<u8>;
 }

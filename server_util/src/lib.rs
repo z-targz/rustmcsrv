@@ -29,3 +29,12 @@ impl ToTokens for ConnectionState {
         tokens.clone_from(&stream);
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub enum PropertyType {
+    Bool {optional: bool},
+    Int {optional: bool},
+    UShort {optional: bool},
+    String {optional: bool},
+}
+

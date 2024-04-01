@@ -3,7 +3,7 @@
 #![feature(non_null_convenience)]
 #![feature(test)]
 #![recursion_limit = "256"]
-
+#![feature(allocator_api)]
 
 #[macro_use]
 extern crate serde_json;
@@ -16,14 +16,12 @@ extern crate test;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-
-
-use chat::chat_thread;
 use tokio::runtime::Runtime;
 use tokio::net::TcpListener;
 
 use lazy_static::lazy_static;
-use tokio::sync::RwLock;
+
+use log::{debug, error, info};
 
 use crate::console::Console;
 use crate::server::server_properties::ServerProperties;
@@ -60,28 +58,27 @@ lazy_static!{
         eprintln!("{e}");
         std::process::exit(1);
     }));
-    pub static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread().enable_time().enable_io().build().unwrap();
+    pub static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread().worker_threads(4).enable_time().enable_io().build().unwrap();
     pub static ref REGISTRY_NBT: Vec<u8> = data_types::registry::get_registry_nbt().unwrap();
-    pub static ref CONSOLE:RwLock<Console> = RwLock::new(Console::new().unwrap());
+    pub static ref CONSOLE: Console = Console::new().unwrap();
 }
+#[tokio::main]
+async fn main() {
 
+    CONSOLE.init().unwrap_or_else(|e| {
+        error!("{e}");
+        std::process::exit(1);
+    });
 
-
-
-
-fn main() {
-
-    //let mut console: Console = Console::new().unwrap().set_logging_level(Level::Debug);
-
+    info!("Hello, World!");
+    debug!("Hello, World!");
 
     RUNTIME.spawn(connection_listener());
 
-    RUNTIME.spawn(chat_thread());
+    RUNTIME.spawn(chat::chat_thread());
 
     
-    //TODO: Start thread for world
-    //TODO: Start thread for nether
-    //TODO: Start thread for end
+    //TODO: Start thread for each world
 
     
 
@@ -90,7 +87,10 @@ fn main() {
 
     //TODO: Handle console input
 
-    std::thread::park();
+    CONSOLE.start().unwrap_or_else(|e| {
+        error!("{e}");
+        std::process::exit(1);
+    });
 }
 
 async fn scheduler(_is_running: &bool) {

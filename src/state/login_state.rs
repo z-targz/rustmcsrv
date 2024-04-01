@@ -1,6 +1,8 @@
 use std::error::Error;
 use std::sync::Arc;
 
+use log::debug;
+use log::info;
 use server_util::ConnectionState;
 use tokio::time::timeout;
 use uuid::Uuid;
@@ -38,11 +40,11 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
     
 
     let addr = connection.get_addr();
-    println!("{addr} > Next State: Login(1)", );
+    debug!("{addr} > Next State: Login(1)", );
     /*
         Listen for SLoginStart
     */
-    println!("Listening for SLoginStart...");
+    debug!("Listening for SLoginStart...");
 
     let player_ref: Arc<Player>;
     match connection.read_next_packet().await {
@@ -70,14 +72,17 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
                         None => (),
                     }
 
-                    println!("Player {player_name} ({player_uuid}) logged in from {addr}.");
+                    info!("Player {player_name} ({player_uuid}) logged in from {addr}.");
 
                     let player = Player::new(player_name, player_uuid, connection);
-                    println!("Registering player...");    
+                    debug!("Registering player...");    
                     
-                    player_ref = THE_SERVER.register_player(player).await;
+                    player_ref = match THE_SERVER.register_player(player).await {
+                        Ok(arc) => arc,
+                        Err(_) => return,
+                    };
 
-                    println!("Registered player!");              
+                    debug!("Registered player!");              
                 },
                 _ => {
                     println!("Incorrect packet.");
@@ -94,7 +99,7 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
     //TODO: Everything in between
 
 
-    println!("Sending CLoginSuccess...");
+    debug!("Sending CLoginSuccess...");
     match player_ref.send_packet(CLoginSuccess::new(
         player_ref.get_uuid(), 
         player_ref.get_name().clone(), 
@@ -106,8 +111,8 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
             return;
         }
     }
-    println!("Sent CLoginSuccess!");
-    println!("Awaiting SLoginAcknowledged...");
+    debug!("Sent CLoginSuccess!");
+    debug!("Awaiting SLoginAcknowledged...");
     match player_ref.read_next_packet().await {
         Ok(s_packet) => match s_packet {
             SPacket::SLoginAcknowledged(_) => (),
@@ -121,8 +126,8 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
             return;
         }
     };
-    println!("Received SLoginAcknowledged!");
-    println!("Switching to configuration state...");
+    debug!("Received SLoginAcknowledged!");
+    debug!("Switching to configuration state...");
     configuration_state(player_ref).await;
 }
 

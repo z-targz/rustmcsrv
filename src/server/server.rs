@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Weak;
@@ -7,9 +8,18 @@ use uuid::Uuid;
 use crate::player::Player;
 use crate::player::Players;
 
-use server_properties::ServerProperties;
+use crate::ServerProperties;
 
-pub mod server_properties;
+#[derive(Debug)]
+pub struct ServerFullError;
+
+impl Error for ServerFullError {}
+
+impl std::fmt::Display for ServerFullError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Error: Server is Full")
+    }
+}
 
 pub struct Server {
     //const
@@ -41,8 +51,12 @@ impl Server {
         &self.properties
     }
 
-    pub async fn register_player(&self, player: Player) -> Arc<Player> {
-        self.players.add(player).await
+    pub async fn register_player(&self, player: Player) -> Result<Arc<Player>, ServerFullError> {
+        if self.players.get_num_players() == self.get_max_players() {
+            player.disconnect("Server is full!").await;
+            return Err(ServerFullError);
+        }
+        Ok(self.players.add(player).await)
     }
 
     pub fn get_max_players(&self) -> i32 {

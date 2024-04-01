@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use base64::prelude::*;
+use log::debug;
 use server_util::ConnectionState;
 
 use crate::connection::Connection;
@@ -21,17 +22,17 @@ use crate::THE_SERVER;
 pub(in crate::state) async fn status_state(mut connection: Connection) {
     connection.set_connection_state(ConnectionState::Status).await;
     let addr = connection.get_addr();
-    println!("{addr} > Next State: Status(1)");
+    debug!("{addr} > Next State: Status(1)");
     /*
         Listen for SStatusRequest
     */
-    println!("{addr} > Listening for SStatusRequest...");
+    debug!("{addr} > Listening for SStatusRequest...");
     match connection.read_next_packet().await {
         Ok(s_packet) => {
             match s_packet {
                 SPacket::SStatusRequest(_) => (),
                 _ => {
-                    println!("{addr} > Incorrect packet...");
+                    debug!("{addr} > Incorrect packet...");
                     connection.drop();
                     return;
                 }
@@ -42,12 +43,12 @@ pub(in crate::state) async fn status_state(mut connection: Connection) {
             return;
         }
     }
-    println!("{addr} > Received SStatusRequest!");
+    debug!("{addr} > Received SStatusRequest!");
 
     /*
         Send CStatusResponse
      */
-    println!("{addr} > Sending CStatusResponse...");
+    debug!("{addr} > Sending CStatusResponse...");
     match connection.send_packet(generate_status_response()).await {
         Ok(_) => (),
         Err(_) => {
@@ -56,7 +57,7 @@ pub(in crate::state) async fn status_state(mut connection: Connection) {
             return;
         }
     };
-    println!("{addr} > Sent CStatusResponse.");
+    debug!("{addr} > Sent CStatusResponse.");
 
     /*
         Listen for SPingRequest_Status
@@ -70,7 +71,7 @@ pub(in crate::state) async fn status_state(mut connection: Connection) {
                 },
                 _ => {
                     //Incorrect packet
-                    println!("{addr} > Incorrect packet");
+                    debug!("{addr} > Incorrect packet");
                     connection.drop();
                     return;
                 }
@@ -81,7 +82,7 @@ pub(in crate::state) async fn status_state(mut connection: Connection) {
             return;
         }
     }
-    println!("{addr} > Received SPingRequest_Status!");
+    debug!("{addr} > Received SPingRequest_Status!");
 
     /*
         Send SPingResponse_Status
@@ -89,14 +90,14 @@ pub(in crate::state) async fn status_state(mut connection: Connection) {
     match connection.send_packet(CPingResponse_Status::new(payload)).await {
         Ok(_) => (),
         Err(_) => {
-            println!("{addr} > Unable to send packet SPingResponse_Status");
+            debug!("{addr} > Unable to send packet SPingResponse_Status");
             connection.drop();
             return;
         }
     };
 
     connection.drop();
-    println!("Connection Closed: {addr}.");
+    debug!("Connection Closed: {addr}.");
     return;
 }
 

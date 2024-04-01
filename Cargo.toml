@@ -26,6 +26,14 @@ rayon = "1.9.0"
 rustyline = "14.0.0"
 env_logger = "0.11.3"
 log = "0.4.21"
+allocator-api2 = "0.2.16"
+
+[dependencies.hashbrown]
+version = "0.14.3"
+features = [
+    "raw",
+    "allocator-api2",
+]
 
 [dependencies.quartz_nbt]
 version = "0.2.9"

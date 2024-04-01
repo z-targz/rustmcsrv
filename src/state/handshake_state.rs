@@ -1,3 +1,5 @@
+use log::{debug, info};
+
 use crate::connection::Connection;
 use crate::packet::SPacket;
 
@@ -11,17 +13,17 @@ use super::login_state::login_state;
 pub(in crate) async fn handshake_state(mut connection: Connection) {
     let addr = connection.get_addr();
     let result = connection.read_next_packet().await;
-    println!("Connection established: {}", addr);
+    info!("Connection established: {}", addr);
     match result {
         Ok(s_packet) => {
             match s_packet {
                 SPacket::SHandshake(packet) => {
                     
 
-                    println!("{addr} > Handshake Successful!");
-                    println!("{addr} > Protocol Version: {}", packet.get_protocol_version());
-                    println!("{addr} > Hostname used to connect: {}", packet.get_server_address());
-                    println!("{addr} > Port used to connect: {}", packet.get_server_port());
+                    debug!("{addr} > Handshake Successful!");
+                    debug!("{addr} > Protocol Version: {}", packet.get_protocol_version());
+                    debug!("{addr} > Hostname used to connect: {}", packet.get_server_address());
+                    debug!("{addr} > Port used to connect: {}", packet.get_server_port());
                     match packet.get_next_state().get()
                     {
                         1 => {
