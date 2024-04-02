@@ -353,8 +353,8 @@ pub struct TextComponentBuilder<'a, S, T>
     keybind: Option<S>,
     formatting: Option<Formatting>,
     insertion: Option<&'a str>,
-    hover_event: Option<HoverEvent<T>>,
-    click_event: Option<ClickEvent>,
+    hover_event: Option<&'a HoverEvent<T>>,
+    click_event: Option<&'a ClickEvent>,
     extra: Option<Vec<TextComponent<T>>>,
 }
 
@@ -420,6 +420,21 @@ impl<'a, T> TextComponentBuilder<'a, &str, T>
         self
     }
 
+    pub fn insertion(mut self, insertion: &'a str) -> Self {
+        self.insertion = Some(insertion);
+        self
+    }
+
+    pub fn hover_event(mut self, hover_event: &'a HoverEvent<T>) -> Self {
+        self.hover_event = Some(hover_event);
+        self
+    }
+
+    pub fn click_event(mut self, click_event: &'a ClickEvent) -> Self {
+        self.click_event = Some(click_event);
+        self
+    }
+
     fn add_extra_unchecked(mut self, other: TextComponent<T>) -> Self {
         if self.extra.is_none() {
             self.extra = Some(Vec::with_capacity(1));
@@ -481,8 +496,14 @@ impl<'a, T> TextComponentBuilder<'a, &str, T>
                 Some(slice) => Some(slice.to_owned()),
                 None => None,
             },
-            self.hover_event,
-            self.click_event,
+            match self.hover_event {
+                Some(borrow) => Some(borrow.to_owned()),
+                None => None,
+            },
+            match self.click_event {
+                Some(borrow) => Some(borrow.to_owned()),
+                None => None,
+            },
             self.extra,
         )
     }
