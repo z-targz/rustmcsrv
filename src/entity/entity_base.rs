@@ -5,7 +5,8 @@ use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::data_types::JSONTextComponent;
+use crate::data_types::text_component::Json;
+use crate::data_types::TextComponent;
 use crate::data_types::{vec_3d::Vec3d, Rotation};
 use crate::world::World;
 
@@ -84,7 +85,7 @@ pub struct Entity {
     flags: u8,                          //default: 0
     air: i32,                           //default: 300
     #[serde(skip_serializing_if = "Option::is_none")]
-    name: Option<JSONTextComponent>,   //default: None
+    name: Option<TextComponent<Json>>,   //default: None
     is_custom_name_visible: bool,       //default: false
     is_silent: bool,                    //default: false
     has_no_gravity: bool,               //default: false

@@ -57,8 +57,9 @@ fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
     fn borrow(str: &str) -> &str {
         match str {
             "String" => "&",
-            "JSON" => "&",
-            "JSONTextComponent" => "&",
+            "JSONString" => "&",
+            "TextComponent<Json>" => "&",
+            "TextComponent<Nbt>" => "&",
             "NBT" => "&",
             "PrefixedByteArray" => "&",
             "InferredByteArray" => "&",
@@ -181,8 +182,9 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
     fn borrow(str: &str) -> &str {
         match str {
             "String" => "&",
-            "JSON" => "&",
-            "JSONTextComponent" => "&",
+            "JSONString" => "&",
+            "TextComponent<Json>" => "&",
+            "TextComponent<Nbt>" => "&",
             "NBT" => "&",
             "PrefixedByteArray" => "&",
             "InferredByteArray" => "&",

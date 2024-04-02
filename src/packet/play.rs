@@ -1,5 +1,7 @@
 use std::error::Error;
 
+use self::text_component::Nbt;
+
 use super::{Packet, Serverbound, Clientbound};
 
 use server_util::ConnectionState;
@@ -123,7 +125,7 @@ pub struct CBlockUpdate {
 #[allow(non_camel_case_types)]
 /// ## Disconnect (Play)
 pub struct CDisconnect_Play {
-    reason: TextComponent,
+    reason: TextComponent<Nbt>,
 }
 
 #[derive(CPacket)]

@@ -14,7 +14,7 @@ use server_macros::SPacket;
 #[state(Status)]
 #[id(0)]
 pub struct CStatusResponse {
-    json_response: JSON,
+    json_response: JSONString,
 }
 
 #[derive(CPacket)]

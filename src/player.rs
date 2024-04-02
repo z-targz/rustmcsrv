@@ -15,6 +15,7 @@ use std::sync::Weak;
 use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 use crate::connection::ConnectionError;
+use crate::data_types::text_component::Nbt;
 use crate::data_types::TextComponent;
 use crate::entity::entity_base::EntityBase;
 use crate::packet;
@@ -137,10 +138,10 @@ impl<'a> Player {
     }
 
     pub async fn disconnect(&self, reason: &str) {
-        self.disconnect_tc(TextComponent::default().text(reason)).await
+        self.disconnect_tc(TextComponent::builder().text(reason).build()).await
     }
 
-    pub async fn disconnect_tc(&self, reason: TextComponent) {
+    pub async fn disconnect_tc(&self, reason: TextComponent<Nbt>) {
         *self.connected.lock().await = false;
         let player_id : i32;
         match self.id.get() {

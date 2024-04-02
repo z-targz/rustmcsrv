@@ -4,7 +4,10 @@ use std::time::{Duration, SystemTime};
 use log::debug;
 use server_util::ConnectionState;
 use tokio::time;
+use tokio::sync::mpsc;
 
+use crate::data_types::text_component::Formatting;
+use crate::data_types::TextComponent;
 use crate::player::Player;
 use crate::packet::{SPacket, play::*};
 
@@ -13,10 +16,42 @@ pub(in crate::state) async fn play_state(player_ref: Arc<Player>) {
     lock.set_connection_state(ConnectionState::Play).await;
     drop(lock);
     debug!("Made it to the play state!");
-    keep_alive(Arc::downgrade(&player_ref));
+    let tx = keep_alive(Arc::downgrade(&player_ref));
+
+    let reason = 
+        TextComponent::builder()
+            .text("")
+            .formatting(Formatting::builder().color_rgb(0xff00ff).build())
+            .add_extra(
+                TextComponent::builder()
+                    .text("# ")
+                    .formatting(Formatting::builder().color(0x4).obfuscated(true).build())
+                    .build()
+            ).add_extra(
+                TextComponent::builder()
+                    .text("Test ")
+                    .reset_fmt()
+                    .build()
+            ).add_extra(
+                TextComponent::builder()
+                    .text(":3")
+                    .formatting(Formatting::builder().bold(true).build())
+                    .build()
+            ).add_extra(
+                TextComponent::builder()
+                    .text(" #")
+                    .reset_fmt()
+                    .formatting(Formatting::builder().color(0x4).obfuscated(true).build())
+                    .build()
+            ).build();
+
+    player_ref.disconnect_tc(reason).await;
 
     while player_ref.is_connected().await {
         match player_ref.read_next_packet().await {
+            Ok(SPacket::SKeepAlive_Play(packet)) => {
+                let _ = tx.send(packet.get_keep_alive_id()).await;
+            }
             Ok(packet) => player_ref.queue_packet(packet).await,
             Err(_) => {
                 player_ref.disconnect("Connection lost").await;
@@ -26,9 +61,10 @@ pub(in crate::state) async fn play_state(player_ref: Arc<Player>) {
     }
 }
 
-fn keep_alive(weak: Weak<Player>) {
-    #[allow(non_snake_case)]
-    let keep_alive__config = async move {
+//TODO: this really needs reworking
+fn keep_alive(weak: Weak<Player>) -> mpsc::Sender<i64>{
+    let (tx, mut rx) = mpsc::channel::<i64>(1);
+    let keep_alive = async move {
         let mut timer = time::interval(Duration::from_secs(5));
         loop {
             timer.tick().await;
@@ -39,17 +75,13 @@ fn keep_alive(weak: Weak<Player>) {
                     let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
                     match time::timeout(crate::TIMEOUT, lock.send_packet(CKeepAlive_Play::new(time))).await {
                         Ok(_) => {
-                            match lock.read_next_packet().await {
-                                Ok(s_packet) => match s_packet {
-                                    SPacket::SKeepAlive_Play(packet) => {
-                                        if packet.get_keep_alive_id() == time {
-                                            drop(lock);
-                                            continue;
-                                        }
-                                    },
-                                    _ => ()
-                                },
-                                Err(_) => ()
+                            match rx.recv().await {
+                                Some(long) => {
+                                    if long == time {
+                                        continue;
+                                    }
+                                }
+                                None => ()
                             }
                         },
                         Err(_) => (),
@@ -61,5 +93,6 @@ fn keep_alive(weak: Weak<Player>) {
             };
         }
     };
-    tokio::spawn(keep_alive__config);
+    tokio::spawn(keep_alive);
+    tx
 }

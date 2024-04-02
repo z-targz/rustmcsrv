@@ -10,7 +10,8 @@ use super::biome;
 use super::chat_type;
 use super::dimension_type;
 
-use crate::data_types::{JSONTextComponent, TextComponent};
+use crate::data_types::text_component::Json;
+use crate::data_types::TextComponent;
 use crate::data_types::NBT;
 
 use serde::Serialize;
@@ -43,7 +44,7 @@ pub enum Element {
     TrimPattern {
         asset_id: String,
         template_item: String,
-        description: JSONTextComponent,
+        description: TextComponent<Json>,
         decal: i8,
     },
 
@@ -53,7 +54,7 @@ pub enum Element {
         item_model_index: f32,
         #[serde(skip_serializing_if = "Option::is_none")]
         override_armor_materials: Option<HashMap<String, String>>,
-        description: JSONTextComponent,
+        description: TextComponent<Json>,
     },
 
     Biome {

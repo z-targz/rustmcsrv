@@ -9,7 +9,6 @@ pub mod death_location;
 pub mod identifier;
 pub mod prefixed_byte_array;
 pub mod inferred_byte_array;
-pub mod json_text_component;
 pub mod nbt;
 pub mod position;
 pub mod property_array;
@@ -21,6 +20,7 @@ pub mod vec_3d;
 
 pub mod data_types;
 
+
 #[allow(unused)]
 pub use {
     angle::Angle,
@@ -28,7 +28,7 @@ pub use {
     identifier::Identifier, 
     prefixed_byte_array::PrefixedByteArray,
     inferred_byte_array::InferredByteArray,
-    json_text_component::JSONTextComponent,
+
     nbt::NBT,
     position::Position,
     property_array::Property,
