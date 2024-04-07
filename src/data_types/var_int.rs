@@ -57,6 +57,7 @@ impl FromProtocol for VarInt {
 }
 
 impl ToProtocol for VarInt {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         let mut value: u32 = self.get().to_le() as u32;
         let mut out: Vec<u8> = Vec::with_capacity(5);

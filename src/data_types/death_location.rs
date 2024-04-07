@@ -7,6 +7,7 @@ pub struct DeathLocation {
 }
 
 impl ToProtocol for DeathLocation {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         self.death_dimension.to_protocol_bytes()//todo finish
     }

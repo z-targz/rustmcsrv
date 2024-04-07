@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::player::Player;
 use crate::player::Players;
 
+use crate::world::World;
 use crate::ServerProperties;
 
 #[derive(Debug)]
@@ -24,7 +25,7 @@ impl std::fmt::Display for ServerFullError {
 pub struct Server {
     //const
     properties: ServerProperties,
-
+    worlds: Vec<World>,
     players: Players,
     entity_id_cap: Mutex<i32>,
 }
@@ -34,6 +35,7 @@ impl Server {
         let max_players = properties.get_max_players();
         Server { 
             properties : properties,
+            worlds : Vec::with_capacity(3),
             players : Players::new(max_players),
             entity_id_cap : Mutex::new(0)
         }

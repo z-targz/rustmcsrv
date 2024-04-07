@@ -1,6 +1,7 @@
 #![feature(proc_macro_span)]
 
 extern crate proc_macro;
+extern crate seq_macro;
 
 use std::sync::Mutex;
 use std::collections::HashMap;
@@ -10,12 +11,16 @@ use proc_macro::TokenStream;
 use quote::quote;
 
 use quote::ToTokens;
+use quote::TokenStreamExt;
+use syn::LitInt;
 use syn::MetaList;
 use syn::Data;
 use syn::DataStruct;
 use syn::Fields;
 use syn::parse_macro_input;
 use syn::LitStr;
+
+use seq_macro::seq;
 
 use server_util::ConnectionState;
 use server_util::PropertyType;
@@ -33,6 +38,46 @@ lazy_static!{
 
     static ref PROPERTY_TYPES: Mutex<HashMap<String, PropertyType>> = Mutex::new(HashMap::new());
 }
+
+#[proc_macro_derive(SPacketManual, attributes(state, id))]
+pub fn register_spacket_manual(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+    let (
+        name, 
+        id, 
+        state, 
+        _fields
+    ) = impl_packet(&ast);
+    match state {
+        ConnectionState::Handshake => {
+            let mut lock = HANDSHAKE_PACKETS.lock().unwrap();
+            lock.insert(id, name.to_string());
+            drop(lock);
+        },
+        ConnectionState::Status => {
+            let mut lock = STATUS_PACKETS.lock().unwrap();
+            lock.insert(id, name.to_string());
+            drop(lock);
+        },
+        ConnectionState::Login => {
+            let mut lock = LOGIN_PACKETS.lock().unwrap();
+            lock.insert(id, name.to_string());
+            drop(lock);
+        },
+        ConnectionState::Configuration => {
+            let mut lock = CONFIGURATION_PACKETS.lock().unwrap();
+            lock.insert(id, name.to_string());
+            drop(lock);
+        },
+        ConnectionState::Play => {
+            let mut lock = PLAY_PACKETS.lock().unwrap();
+            lock.insert(id, name.to_string());
+            drop(lock);
+        }
+    }
+    quote!{}.into()
+}
+
 
 #[proc_macro_derive(CPacket, attributes(state, id))]
 pub fn cpacket_derive(input: TokenStream) -> TokenStream {
@@ -279,7 +324,6 @@ fn impl_packet(ast: &syn::DeriveInput) -> (&syn::Ident, i32, ConnectionState, &s
                 _ => panic!("{msg}"),
             }
         }
-
     }
 
     let fields = match &ast.data {
@@ -583,4 +627,3 @@ fn impl_create_property_types(ast: &syn::DeriveInput) -> TokenStream {
         }
     }.into()
 }
-

@@ -17,6 +17,7 @@ pub trait FromProtocol {
 //String
 
 impl FromProtocol for String {
+    #[inline]
     fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
         where Self: Sized {
             let len = VarInt::from_protocol_iter(iter)?.get() as usize;
@@ -29,6 +30,7 @@ impl FromProtocol for String {
 }
 
 impl ToProtocol for String {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         let raw = self.as_bytes().to_owned().into_iter();
         let len = VarInt::new(raw.len() as i32).to_protocol_bytes().into_iter();
@@ -39,6 +41,7 @@ impl ToProtocol for String {
 //Float (f32)
 
 impl FromProtocol for f32 {
+    #[inline]
     fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
         where Self: Sized {
             let bytes = iter.take(4).collect::<Vec<u8>>();
@@ -50,6 +53,7 @@ impl FromProtocol for f32 {
 }
 
 impl ToProtocol for f32 {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         self.to_be_bytes().to_vec()
     }
@@ -58,6 +62,7 @@ impl ToProtocol for f32 {
 //Double (f64)
 
 impl FromProtocol for f64 {
+    #[inline]
     fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
         where Self: Sized {
             let bytes = iter.take(8).collect::<Vec<u8>>();
@@ -69,6 +74,7 @@ impl FromProtocol for f64 {
 }
 
 impl ToProtocol for f64 {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         self.to_be_bytes().to_vec()
     }
@@ -77,6 +83,7 @@ impl ToProtocol for f64 {
 //Boolean (bool)
 
 impl FromProtocol for bool {
+    #[inline]
     fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
         where Self: Sized {
             let Some(value) = iter.next() else { return Err(ProtocolError::IterEndError) };
@@ -89,6 +96,7 @@ impl FromProtocol for bool {
 }
 
 impl ToProtocol for bool {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         match self {
             true => vec![1u8],
@@ -100,6 +108,7 @@ impl ToProtocol for bool {
 //Unsigned Byte (u8)
 
 impl FromProtocol for u8 {
+    #[inline]
     fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
         where Self: Sized {
             match iter.next() {
@@ -110,6 +119,7 @@ impl FromProtocol for u8 {
 }
 
 impl ToProtocol for u8 {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         vec![*self]
     }
@@ -118,6 +128,7 @@ impl ToProtocol for u8 {
 //Signed Byte (i8)
 
 impl FromProtocol for i8 {
+    #[inline]
     fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
         where Self: Sized {
         match iter.next() {
@@ -128,6 +139,7 @@ impl FromProtocol for i8 {
 }
 
 impl ToProtocol for i8 {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         vec![*self as u8]
     }
@@ -136,6 +148,7 @@ impl ToProtocol for i8 {
 //Unsigned Short (u16)
 
 impl FromProtocol for u16 {
+    #[inline]
     fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
         where Self: Sized {
             let array: [u8; 2] = std::convert::TryFrom::try_from(iter.take(2).collect::<Vec<u8>>().as_slice())?;
@@ -144,6 +157,7 @@ impl FromProtocol for u16 {
 }
 
 impl ToProtocol for u16 {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         self.to_be_bytes().to_vec()
     }
@@ -152,6 +166,7 @@ impl ToProtocol for u16 {
 //Signed Short (i16)
 
 impl FromProtocol for i16 {
+    #[inline]
     fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
         where Self: Sized {
             let array: [u8; 2] = std::convert::TryFrom::try_from(iter.take(2).collect::<Vec<u8>>().as_slice())?;
@@ -160,6 +175,7 @@ impl FromProtocol for i16 {
 }
 
 impl ToProtocol for i16 {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         self.to_be_bytes().to_vec()
     }
@@ -168,6 +184,7 @@ impl ToProtocol for i16 {
 //Int (i32)
 
 impl ToProtocol for i32 {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         self.to_be_bytes().to_vec()
     }
@@ -176,6 +193,7 @@ impl ToProtocol for i32 {
 //Long (i64)
 
 impl FromProtocol for i64 {
+    #[inline]
     fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
         where Self: Sized {
             let array: [u8; 8] = std::convert::TryFrom::try_from(iter.take(8).collect::<Vec<u8>>().as_slice())?;
@@ -184,6 +202,7 @@ impl FromProtocol for i64 {
 }
 
 impl ToProtocol for i64 {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         self.to_be_bytes().to_vec()
     }
@@ -192,6 +211,7 @@ impl ToProtocol for i64 {
 //Uuid
 
 impl FromProtocol for Uuid {
+    #[inline]
     fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
         where Self: Sized {
             let array: [u8; 16] = std::convert::TryFrom::try_from(iter.take(16).collect::<Vec<u8>>().as_slice())?;
@@ -200,6 +220,7 @@ impl FromProtocol for Uuid {
 }
 
 impl ToProtocol for Uuid {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         //really counterintuitive, but to_u128_le gives an Little Endian representation of a UUID in Big Endian,
         //so we want to retain this byte order by using to_le_bytes(), which contains a Little Endian representation

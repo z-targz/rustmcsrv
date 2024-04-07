@@ -153,7 +153,7 @@ impl Connection {
         let header_size = 5 - header_iter.count();
 
         trace!("Reading packet data...");
-        let mut buf = Box::new(Vec::with_capacity(packet_size_bytes));
+        let mut buf = Vec::with_capacity(packet_size_bytes);
         buf.resize(header_size + packet_size_bytes, 0u8);
 
         let Ok(bytes) = timeout(TIMEOUT, socket_ro.read_exact(buf.as_mut_slice())).await? else {return Err(ConnectionError::ConnectionClosed)?};

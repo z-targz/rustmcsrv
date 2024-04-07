@@ -19,16 +19,6 @@ pub trait Serverbound: Packet {
     fn parse(iter: &mut impl Iterator<Item = u8>) -> Result<Box<Self>, Box<dyn Error + Send + Sync>> where Self: Sized;
 }
 
-/*
-#[allow(non_camel_case_types)]
-pub enum CPacket {
-    CStatusResponse(Box<status::CStatusResponse>),
-    CPingResponse_Status(Box<status::CPingResponse_Status>),
-}*/
-
-
-
-
 #[derive(Debug)]
 pub enum CreatePacketError {
     InvalidPacketIDError,

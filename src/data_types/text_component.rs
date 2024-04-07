@@ -248,18 +248,21 @@ impl TextComponent<Nbt> {
 }
 
 impl ToProtocol for TextComponent<Nbt> {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         self.to_nbt().to_protocol_bytes()
     }
 }
 
 impl TextComponent<Json> {
+    #[inline]
     pub fn to_json_string(&self) -> String {
         serde_json::to_string(&self).unwrap()
     }
 }
 
 impl ToProtocol for TextComponent<Json> {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         self.to_json_string().to_protocol_bytes()
     }

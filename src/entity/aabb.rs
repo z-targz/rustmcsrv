@@ -15,13 +15,13 @@ impl BoundingBox {
     }
 
     pub fn contains(&self, point_xyz: Vec3d) -> bool {
-        self.min.0 <= point_xyz.0 && point_xyz.0 <= self.max.0 &&
-        self.min.1 <= point_xyz.1 && point_xyz.1 <= self.max.1 &&
-        self.min.2 <= point_xyz.2 && point_xyz.2 <= self.max.2
+        self.min.x <= point_xyz.x && point_xyz.x <= self.max.x &&
+        self.min.y <= point_xyz.y && point_xyz.y <= self.max.y &&
+        self.min.z <= point_xyz.z && point_xyz.z <= self.max.z
     }
 
     pub fn get_center(&self) -> Vec3d {
-        Vec3d((self.min.0 + self.max.0) / 2.0, (self.min.1 + self.max.1) / 2.0, (self.min.2 + self.max.2) / 2.0)
+        Vec3d::new((self.min.x + self.max.x) / 2.0, (self.min.y + self.max.y) / 2.0, (self.min.z + self.max.z) / 2.0)
     }
 
     pub fn shift(&mut self, by: Vec3d) {
@@ -30,9 +30,9 @@ impl BoundingBox {
     }
 
     pub fn overlaps(&self, other: BoundingBox) -> bool {
-        self.min.0 <= other.max.0 && self.max.0 >= other.min.0 &&
-        self.min.1 <= other.max.1 && self.max.1 >= other.min.1 &&
-        self.min.2 <= other.max.2 && self.max.2 >= other.min.0
+        self.min.x <= other.max.x && self.max.x >= other.min.x &&
+        self.min.y <= other.max.y && self.max.y >= other.min.y &&
+        self.min.z <= other.max.z && self.max.z >= other.min.x
     }
 
     pub fn resize(&mut self, min_xyz: Vec3d, max_xyz: Vec3d) {

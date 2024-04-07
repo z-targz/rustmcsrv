@@ -21,12 +21,23 @@ use server_macros::ServerPropertiesDerive;
 pub struct ServerProperties {
     #[serde(rename = "server-port")]
     server_port: u16,
+
     motd: String,
+
     #[serde(rename = "max-players")]
     max_players: i32,
+
     #[serde(rename = "online-mode")]
     online_mode: bool,
-    //gamemode: Gamemode,
+
+    #[serde(rename = "view-distance")]
+    view_distance: i32,
+
+    #[serde(rename = "simulation-distance")]
+    simulation_distance: i32,
+
+    #[serde(rename = "spawn-chunk-radius")]
+    spawn_chunk_radius: i32,
 }
 
 impl ServerProperties {
@@ -46,6 +57,18 @@ impl ServerProperties {
         self.online_mode
     }
 
+    pub fn get_view_distance(&self) -> i32 {
+        self.view_distance
+    }
+
+    pub fn get_simulation_distance(&self) -> i32 {
+        self.simulation_distance
+    }
+
+    pub fn get_spawn_chunk_radius(&self) -> i32 {
+        self.spawn_chunk_radius
+    }
+
     /// Generates the default server_properties.json
     pub fn default() -> Self {
         ServerProperties { 
@@ -53,6 +76,9 @@ impl ServerProperties {
             motd: "A Minecraft Server (§cMade with Rust!§r)".to_string(), 
             max_players: 20, 
             online_mode: false,
+            view_distance: 10,
+            simulation_distance: 10,
+            spawn_chunk_radius: 11,
         }
     }
 

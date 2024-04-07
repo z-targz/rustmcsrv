@@ -5,6 +5,7 @@ use server_util::error::ProtocolError;
 pub mod registry;
 
 pub mod angle;
+pub mod chunk;
 pub mod death_location;
 pub mod identifier;
 pub mod prefixed_byte_array;
@@ -14,6 +15,7 @@ pub mod position;
 pub mod property_array;
 pub mod statistic_array;
 pub mod text_component;
+pub mod var_ushort;
 pub mod var_int;
 pub mod var_long;
 pub mod vec_3d;
@@ -24,6 +26,7 @@ pub mod data_types;
 #[allow(unused)]
 pub use {
     angle::Angle,
+    chunk::ProtocolChunk,
     death_location::DeathLocation,
     identifier::Identifier, 
     prefixed_byte_array::PrefixedByteArray,
@@ -36,6 +39,7 @@ pub use {
     statistic_array::Statistic,
     statistic_array::StatisticArray,
     text_component::TextComponent,
+    var_ushort::VarUShort,
     var_int::VarInt,
     var_long::VarLong,
     vec_3d::Vec3d, 

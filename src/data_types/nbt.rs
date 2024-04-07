@@ -21,6 +21,7 @@ impl FromProtocol for NBT {
 impl ToProtocol for NBT {
     /// This function strips the root tag from the provided NBT so it can be sent
     /// over the network in versions 1.20.2+
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         let mut out = vec![10u8];
         out.extend(self.as_slice()[3..].iter());

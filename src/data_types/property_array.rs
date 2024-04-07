@@ -21,6 +21,7 @@ impl Property {
 }
 
 impl ToProtocol for Property {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         let mut out: Vec<u8> = Vec::new();
         out.append(&mut self.name.to_protocol_bytes());
@@ -41,6 +42,7 @@ impl ToProtocol for Property {
 pub type PropertyArray = Vec<Property>;
 
 impl FromProtocol for PropertyArray {
+    #[inline]
     fn from_protocol_iter(iter: &mut impl Iterator<Item = u8>) -> Result<Self, ProtocolError> 
         where Self: Sized {
             let len = VarInt::from_protocol_iter(iter)?.get();
@@ -61,6 +63,7 @@ impl FromProtocol for PropertyArray {
 }
 
 impl ToProtocol for PropertyArray {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         let mut out: Vec<u8> = Vec::new();
         let len = self.len();

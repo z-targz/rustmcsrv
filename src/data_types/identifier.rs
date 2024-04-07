@@ -17,19 +17,21 @@ impl std::fmt::Display for InvalidIdentifier {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Identifier {
     namespace: String,
     thing: String,
 }
 
 impl ToProtocol for Identifier {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         self.to_string().to_protocol_bytes()
     }
 }
 
 impl ToProtocol for Vec<Identifier> {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         self.into_iter().map(|identifier| identifier.to_protocol_bytes()).flatten().collect()
     }

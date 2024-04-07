@@ -1,5 +1,7 @@
 extern crate quote;
 extern crate proc_macro2;
+extern crate hashbrown;
+
 
 use proc_macro2::TokenStream;
 

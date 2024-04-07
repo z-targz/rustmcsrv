@@ -22,6 +22,7 @@ impl FromProtocol for InferredByteArray {
 }
 
 impl ToProtocol for InferredByteArray {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         self.get_bytes().clone()
     }

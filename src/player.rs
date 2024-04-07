@@ -27,23 +27,7 @@ use crate::TIMEOUT;
 use crate::connection::Connection;
 use crate::packet::login::CDisconnect_Login;
 use crate::player_data::PlayerData;
-/*
-#[derive(Debug)]
-pub enum PlayerError {
-    PlayerNotFound
-}
 
-impl Error for PlayerError {}
-
-impl std::fmt::Display for PlayerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let err_type = match self {
-            PlayerError::PlayerNotFound => {"Player Not Found".to_string()}
-
-        };
-        write!(f, "PlayerError: {err_type}.")
-    }
-}*/
 
 #[derive(Debug)]
 pub struct PermissionError;

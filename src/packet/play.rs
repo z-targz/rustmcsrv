@@ -119,6 +119,14 @@ pub struct CBlockUpdate {
     block_id: VarInt,
 }
 
+#[derive(SPacket, Debug)]
+#[state(Play)]
+#[id(0x15)]
+#[allow(non_camel_case_types)]
+pub struct SKeepAlive_Play {
+    keep_alive_id: i64,
+}
+
 #[derive(CPacket)]
 #[state(Play)]
 #[id(0x1b)]
@@ -126,6 +134,20 @@ pub struct CBlockUpdate {
 /// ## Disconnect (Play)
 pub struct CDisconnect_Play {
     reason: TextComponent<Nbt>,
+}
+
+#[derive(CPacket)]
+#[state(Play)]
+#[id(0x23)]
+pub struct CInitializeWorldBorder {
+    x: f64,
+    z: f64,
+    old_diameter: f64,
+    new_diameter: f64,
+    speed: VarLong,
+    portal_teleport_boundary: VarInt,
+    warning_blocks: VarInt,
+    warning_time: VarInt,
 }
 
 #[derive(CPacket)]
@@ -164,6 +186,21 @@ pub struct CLogin_Play {
 
     //and many more
 }
+
+#[derive(CPacket)]
+#[state(Play)]
+#[id(0x36)]
+/// Flags
+/// `0x01` - Invulnerable
+/// `0x02` - Flying
+/// `0x04` - Allow Flying
+/// `0x08` - Creative Mode (Instant Break)
+pub struct CPlayerAbilities {
+    flags: u8,
+    fly_speed: f64,
+    fov_modifier: f32,
+}
+
 /// Flags (If the value of the byte is masked, it's a relative offset, otherwise it's absolute):
 /// `0x01` - X
 /// `0x02` - Y
@@ -183,10 +220,55 @@ pub struct CSynchronizePlayerPosition {
     teleport_id: VarInt,
 }
 
-#[derive(SPacket, Debug)]
+#[derive(CPacket)]
 #[state(Play)]
-#[id(0x15)]
-#[allow(non_camel_case_types)]
-pub struct SKeepAlive_Play {
-    keep_alive_id: i64,
+#[id(0x4b)]
+pub struct CSetBorderCenter {
+    x: f64,
+    z: f64,
+}
+
+#[derive(CPacket)]
+#[state(Play)]
+#[id(0x4c)]
+pub struct CSetBorderLerpSize {
+    old_diameter: f64,
+    new_diameter: f64,
+    speed: VarLong,
+}
+
+#[derive(CPacket)]
+#[state(Play)]
+#[id(0x4d)]
+pub struct CSetBorderSize {
+    diameter: f64,
+}
+
+#[derive(CPacket)]
+#[state(Play)]
+#[id(0x4e)]
+pub struct CSetBorderWarningDelay {
+    warning_time: VarInt,
+}
+
+#[derive(CPacket)]
+#[state(Play)]
+#[id(0x4f)]
+pub struct CBorderWarningDistance {
+    warning_blocks: VarInt,
+}
+
+#[derive(CPacket)]
+#[state(Play)]
+#[id(0x51)]
+pub struct CSetHeldItem {
+    slot: u8,
+}
+
+#[derive(CPacket)]
+#[state(Play)]
+#[id(0x62)]
+pub struct CUpdateTime {
+    world_age: i64,
+    time_of_day: i64,
 }

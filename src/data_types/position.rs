@@ -77,6 +77,7 @@ impl FromProtocol for Position {
 }
 
 impl ToProtocol for Position {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         (((self.x as i64 & 0x3FFFFFF) << 38) | ((self.z as i64 & 0x3FFFFFF) << 12) | (self.y as i64 & 0xFFF)).to_be_bytes().to_vec()
     }

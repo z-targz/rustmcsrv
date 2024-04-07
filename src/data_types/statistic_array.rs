@@ -7,6 +7,7 @@ pub struct Statistic {
 }
 
 impl ToProtocol for Statistic {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         self.category_id
         .to_protocol_bytes()
@@ -27,6 +28,7 @@ impl ToProtocol for Statistic {
 pub type StatisticArray = Vec<Statistic>;
 
 impl ToProtocol for StatisticArray {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         VarInt::new(self.len() as i32)
         .to_protocol_bytes()

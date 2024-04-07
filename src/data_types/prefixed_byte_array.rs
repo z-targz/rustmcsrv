@@ -27,6 +27,7 @@ impl FromProtocol for PrefixedByteArray {
 }
 
 impl ToProtocol for PrefixedByteArray {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         VarInt::new(self.get_bytes().len() as i32).to_protocol_bytes().into_iter().chain(self.get_bytes().clone().into_iter()).collect()
     }

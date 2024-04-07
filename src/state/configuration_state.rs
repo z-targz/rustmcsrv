@@ -76,3 +76,46 @@ async fn filter_packets_until_s_acknowledge_finish_config(player_ref: Arc<Player
     Err("Did not find SAcknowledgeFinishConfig!")?
 }
 
+//TODO: Fix this so it actually works, although it doesn't seem necessary in the configuration state
+fn keep_alive(weak: Weak<Player>) {
+    #[allow(non_snake_case)]
+    let keep_alive__config = async move {
+        let mut timer = time::interval(Duration::from_secs(5));
+        loop {
+            timer.tick().await;
+            match weak.upgrade() {
+                Some(player) => {
+                    match player.get_connection_state().await {
+                        ConnectionState::Configuration => {
+                            //potential BUG: Client might not immediately send the keep alive packet
+                            let lock = player.get_connection().write().await;
+                            let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
+                            match time::timeout(crate::TIMEOUT, lock.send_packet(CKeepAlive_Config::new(time))).await {
+                                Ok(_) => {
+                                    match lock.read_next_packet().await {
+                                        Ok(s_packet) => match s_packet {
+                                            SPacket::SKeepAlive_Config(packet) => {
+                                                if packet.get_keep_alive_id() == time {
+                                                    drop(lock);
+                                                    continue;
+                                                }
+                                            },
+                                            _ => ()
+                                        },
+                                        Err(_) => ()
+                                    }
+                                },
+                                Err(_) => (),
+                            }
+                            player.disconnect("Timed out.").await;
+                            break;
+                        },
+                        _ => break
+                    }
+                },
+                None => break
+            };
+        }
+    };
+    tokio::spawn(keep_alive__config);
+}

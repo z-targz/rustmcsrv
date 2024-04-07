@@ -56,6 +56,7 @@ impl FromProtocol for VarLong {
 }
 
 impl ToProtocol for VarLong {
+    #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
         let mut value:u64 = self.get().to_le() as u64;
     let mut out: Vec<u8> = Vec::with_capacity(9);
