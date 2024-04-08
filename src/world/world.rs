@@ -1,6 +1,7 @@
 use core::hash;
 use std::error::Error;
 use std::hash::Hash;
+use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex, RwLock, Weak};
 
 use dashmap::DashMap;
@@ -18,7 +19,7 @@ use crate::THE_SERVER;
 
 use rayon::iter::*;
 
-use super::chunk::Chunk;
+use super::chunk::{Chunk, ChunkCache};
 use super::region::{LoadRegion, TicketRegion, TicketType};
 
 const TIME_DAY: i64 = 0;
@@ -40,6 +41,7 @@ pub struct World {
     load_regions: HashMap<(i32, i32), LoadRegion>,
     loaded_chunks: DashMap<(i32, i32), Arc<Mutex<Chunk>>>,
     tickets: Mutex<Vec<Arc<Ticket2>>>,
+    chunk_cache: ChunkCache,
 }
 
 impl World {
@@ -50,7 +52,7 @@ impl World {
     /// Use this function when loading the world from a directory
     pub fn new(identifier: Identifier, max_height_times_16: u8, world_age: i64, world_time: i64, beds_explode: bool) -> Self {
         let the_world = World {
-            players : DashMap::with_capacity(crate::THE_SERVER.get_max_players() as usize),
+            players : DashMap::with_capacity(THE_SERVER.get_max_players() as usize),
             loaded_entities: DashMap::new(),
             identifier : identifier,
             chunk_sections : max_height_times_16,
@@ -61,10 +63,14 @@ impl World {
             load_regions : HashMap::new(),
             loaded_chunks : DashMap::new(),
             tickets : Vec::new().into(),
+            chunk_cache : ChunkCache::new(NonZeroUsize::new(
+                (((THE_SERVER.get_properties().get_view_distance() + 2) * 2 + 1).pow(2) * THE_SERVER.get_properties().get_max_players()
+                + ((THE_SERVER.get_properties().get_spawn_chunk_radius() + 2) * 2 + 1).pow(2)) as usize
+            ).unwrap()),
         };
 
         //TODO: use world spawn location instead of 0, 0
-        the_world.create_chunk_ticket((0, 0), 34 - crate::THE_SERVER.get_properties().get_spawn_chunk_radius() as u8, -1, TicketType::Start);
+        the_world.create_chunk_ticket((0, 0), 34 - THE_SERVER.get_properties().get_spawn_chunk_radius() as u8, -1, TicketType::Start);
 
         the_world
     }
@@ -77,7 +83,7 @@ impl World {
     pub fn create_new_world(identifier: Identifier, max_height_times_16: u8, beds_explode: bool) -> Option<Self> {
         //TODO: create world files
         let new_world = World {
-            players : DashMap::with_capacity(crate::THE_SERVER.get_max_players() as usize),
+            players : DashMap::with_capacity(THE_SERVER.get_max_players() as usize),
             loaded_entities: DashMap::new(),
             identifier : identifier,
             chunk_sections : max_height_times_16,
@@ -88,6 +94,10 @@ impl World {
             load_regions : HashMap::new(),
             loaded_chunks : DashMap::new(),
             tickets: Vec::new().into(),
+            chunk_cache : ChunkCache::new(NonZeroUsize::new(
+                (((THE_SERVER.get_properties().get_view_distance() + 2) * 2 + 1).pow(2) * THE_SERVER.get_properties().get_max_players()
+                + ((THE_SERVER.get_properties().get_spawn_chunk_radius() + 2) * 2 + 1).pow(2)) as usize
+            ).unwrap()),
         };
 
         Some(new_world)
@@ -127,7 +137,7 @@ impl World {
 
         //TODO: add new tickets
 
-        let view_distance: i32 = crate::THE_SERVER.get_properties().get_view_distance();
+        let view_distance: i32 = THE_SERVER.get_properties().get_view_distance();
         for weak_player in self.players.iter() {
             match weak_player.upgrade() {
                 Some(player) => {
@@ -306,7 +316,7 @@ impl World {
         affected_regions
     }
 
-    pub fn create_ticket_2(&self, ticket: Ticket2) {
+    pub fn create_ticket_2(&mut self, ticket: Ticket2) {
         let ticket_arc = Arc::new(ticket);
         self.tickets.lock().unwrap().push(ticket_arc.clone());
 
@@ -320,6 +330,10 @@ impl World {
                     chunk.lock().unwrap().block_tickets.push(Arc::downgrade(&ticket_arc))
                 },
                 None => {
+                    match self.chunk_cache.get(&(chunk_x, chunk_z)) {
+                        Some(_) => todo!(),
+                        None => todo!(),
+                    }
                     //TODO: Load Chunk
                 },
             }

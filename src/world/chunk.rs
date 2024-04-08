@@ -105,15 +105,13 @@ impl ChunkSection {
 }
 
 pub struct ChunkCache {
-    world: Weak<World>,
     max_capacity: NonZeroUsize,
     cache: LruCache<(i32, i32), Arc<Mutex<Chunk>>>
 }
 
 impl ChunkCache {
-    pub fn new(world: Weak<World>, max_capacity: NonZeroUsize) -> Self {
+    pub fn new(max_capacity: NonZeroUsize) -> Self {
         Self {
-            world : world,
             max_capacity : max_capacity,
             cache : LruCache::new(max_capacity),
         }
@@ -137,6 +135,10 @@ impl ChunkCache {
             .map(|(a, b)| {
                 (a, Arc::into_inner(b).unwrap().into_inner().unwrap())
             }).collect()
+    }
+
+    pub fn get(&mut self, at: &(i32, i32)) -> Option<Arc<Mutex<Chunk>>> {
+        self.cache.get(at).cloned()
     }
 }
 
