@@ -119,17 +119,16 @@ pub struct CBlockUpdate {
     block_id: VarInt,
 }
 
-#[derive(SPacket, Debug)]
+#[derive(CPacket)]
 #[state(Play)]
-#[id(0x15)]
-#[allow(non_camel_case_types)]
-pub struct SKeepAlive_Play {
-    keep_alive_id: i64,
+#[id(0x12)]
+pub struct CCloseContainer {
+    window_id: u8,
 }
 
 #[derive(CPacket)]
 #[state(Play)]
-#[id(0x1b)]
+#[id(0x1d)]
 #[allow(non_camel_case_types)]
 /// ## Disconnect (Play)
 pub struct CDisconnect_Play {
@@ -138,7 +137,7 @@ pub struct CDisconnect_Play {
 
 #[derive(CPacket)]
 #[state(Play)]
-#[id(0x23)]
+#[id(0x25)]
 pub struct CInitializeWorldBorder {
     x: f64,
     z: f64,
@@ -152,7 +151,7 @@ pub struct CInitializeWorldBorder {
 
 #[derive(CPacket)]
 #[state(Play)]
-#[id(0x24)]
+#[id(0x26)]
 #[allow(non_camel_case_types)]
 /// ## Clientbound Keep Alive (Play)
 pub struct CKeepAlive_Play {
@@ -161,7 +160,7 @@ pub struct CKeepAlive_Play {
 
 #[derive(CPacket)]
 #[state(Play)]
-#[id(0x29)]
+#[id(0x2b)]
 #[allow(non_camel_case_types)]
 pub struct CLogin_Play {
     entity_id: i32,
@@ -174,7 +173,7 @@ pub struct CLogin_Play {
     reduced_debug_info: bool,
     enable_respawn_screen: bool, //Set to false when the doImmediateRespawn gamerule is true.
     do_limited_crafting: bool, //Unused, just send false
-    dimension_type: Identifier,
+    dimension_type: VarInt,
     dimension_name: Identifier,
     hashed_seed: i64,
     game_mode: u8,
@@ -183,13 +182,13 @@ pub struct CLogin_Play {
     is_flat: bool, //superflat world yes or no
     death_location: Option<DeathLocation>,
     portal_cooldown: VarInt, //num ticks before player can use portal again. should start at 0
-
+    enforces_secure_chat: bool,
     //and many more
 }
 
 #[derive(CPacket)]
 #[state(Play)]
-#[id(0x36)]
+#[id(0x38)]
 /// Flags
 /// `0x01` - Invulnerable
 /// `0x02` - Flying
@@ -209,7 +208,7 @@ pub struct CPlayerAbilities {
 /// `0x10` - X_ROT (Yaw)
 #[derive(CPacket)]
 #[state(Play)]
-#[id(0x3e)]
+#[id(0x40)]
 pub struct CSynchronizePlayerPosition {
     x: f64,
     y: f64,
@@ -222,7 +221,7 @@ pub struct CSynchronizePlayerPosition {
 
 #[derive(CPacket)]
 #[state(Play)]
-#[id(0x4b)]
+#[id(0x4d)]
 pub struct CSetBorderCenter {
     x: f64,
     z: f64,
@@ -230,7 +229,7 @@ pub struct CSetBorderCenter {
 
 #[derive(CPacket)]
 #[state(Play)]
-#[id(0x4c)]
+#[id(0x4e)]
 pub struct CSetBorderLerpSize {
     old_diameter: f64,
     new_diameter: f64,
@@ -239,36 +238,45 @@ pub struct CSetBorderLerpSize {
 
 #[derive(CPacket)]
 #[state(Play)]
-#[id(0x4d)]
+#[id(0x4f)]
 pub struct CSetBorderSize {
     diameter: f64,
 }
 
 #[derive(CPacket)]
 #[state(Play)]
-#[id(0x4e)]
+#[id(0x50)]
 pub struct CSetBorderWarningDelay {
     warning_time: VarInt,
 }
 
 #[derive(CPacket)]
 #[state(Play)]
-#[id(0x4f)]
+#[id(0x51)]
 pub struct CBorderWarningDistance {
     warning_blocks: VarInt,
 }
 
 #[derive(CPacket)]
 #[state(Play)]
-#[id(0x51)]
+#[id(0x53)]
 pub struct CSetHeldItem {
     slot: u8,
 }
 
 #[derive(CPacket)]
 #[state(Play)]
-#[id(0x62)]
+#[id(0x64)]
 pub struct CUpdateTime {
     world_age: i64,
     time_of_day: i64,
+}
+
+
+#[derive(SPacket, Debug)]
+#[state(Play)]
+#[id(0x18)]
+#[allow(non_camel_case_types)]
+pub struct SKeepAlive_Play {
+    keep_alive_id: i64,
 }

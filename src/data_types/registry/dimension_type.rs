@@ -11,6 +11,7 @@ pub enum LightLevel {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct IntegerDistribution {
     r#type: String,
+    #[serde(flatten)]
     value: Uniform, //Only uniform is ever used, this is a potential BUG in future versions
 }
 
@@ -24,5 +25,5 @@ pub enum DistributionInfo {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Uniform {
     min_inclusive: i32,
-    max_inclusive: i32,
+    max_inclusive: i32, 
 }

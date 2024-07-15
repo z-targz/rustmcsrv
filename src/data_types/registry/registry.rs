@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::{fs::File, path::Path};
 
 use std::collections::HashMap;
@@ -5,14 +6,18 @@ use std::collections::HashMap;
 use quartz_nbt::io::NbtIoError;
 use quartz_nbt::io::Flavor;
 use quartz_nbt::serde::serialize;
-use serde::Deserialize;
+use serde::de::{self, Visitor};
+use serde::{Deserialize, Deserializer};
 use super::biome;
 use super::chat_type;
 use super::dimension_type;
+use super::wolf_variant;
 
 use crate::data_types::text_component::Json;
 use crate::data_types::TextComponent;
 use crate::data_types::NBT;
+use itertools::Itertools;
+
 
 use serde::Serialize;
 
@@ -20,7 +25,6 @@ use serde::Serialize;
 
 #[derive(serde::Serialize, Deserialize, Debug)]
 pub struct RegistryData {
-    //data: Map<quartz_nbt::NbtCompound>,
     data: HashMap<String, Registry>,
 }
 
@@ -37,14 +41,58 @@ pub struct RegistryEntry {
     element: Element,
 }
 
+pub struct NBTifiedRegistryEntry {
+    pub entry_identifier: String,
+    pub data: NBT,
+}
+
+#[derive(serde::Serialize, Deserialize, Debug)]
+pub struct Empty {}
+
+
+
+pub fn byte_from_bool<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    
+    struct ByteOrBool<T>(PhantomData<fn() -> T>);
+    impl<'de, T> Visitor<'de> for ByteOrBool<T>
+    where 
+        T:Deserialize<'de>
+    {
+        type Value = T;
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("bool or i8")
+        }
+        fn visit_bool<E>(self, value: bool) -> Result<T, E> 
+        where 
+            E: de::Error
+        {
+            match value {
+                true => Deserialize::deserialize(de::value::I8Deserializer::new(1)),
+                false => Deserialize::deserialize(de::value::I8Deserializer::new(0)), 
+            }
+        }
+        fn visit_i8<E>(self, value: i8) -> Result<Self::Value, E>
+        where
+            E: de::Error
+        {
+            Deserialize::deserialize(de::value::I8Deserializer::new(value))    
+        }
+    }
+    deserializer.deserialize_any(ByteOrBool(PhantomData))
+}
+
 #[derive(serde::Serialize, Deserialize, Debug)]
 #[serde(untagged)]
 pub enum Element {
-
     TrimPattern {
         asset_id: String,
         template_item: String,
         description: TextComponent<Json>,
+        #[serde(deserialize_with = "byte_from_bool")]
         decal: i8,
     },
 
@@ -58,12 +106,29 @@ pub enum Element {
     },
 
     Biome {
+        #[serde(deserialize_with = "byte_from_bool")]
         has_precipitation: i8,
         temperature: f32,
         #[serde(skip_serializing_if = "Option::is_none")]
         temperature_modifier: Option<String>,
         downfall: f32,
         effects: biome::Effects,
+
+        #[serde(skip_serializing)]
+        carvers: Option<HashMap<String, biome::Carvers>>,
+
+        #[serde(skip_serializing)]
+        creature_spawn_probability: Option<f32>,
+
+        #[serde(skip_serializing)]
+        features: Option<Vec<Vec<String>>>,
+
+        #[serde(skip_serializing)]
+        spawn_costs: Option<Empty>,
+
+        #[serde(skip_serializing)]
+        spawners: Option<HashMap<String, Vec<biome::Spawn>>>,
+
     },
 
     ChatType {
@@ -84,25 +149,46 @@ pub enum Element {
     DimensionType {
         #[serde(skip_serializing_if = "Option::is_none")]
         fixed_time: Option<i64>,
-        has_skylight: i8,
-        has_ceiling: i8,
-        ultrawarm: i8,
-        natural: i8,
-        coordinate_scale: f64,
-        bed_works: i8,
-        respawn_anchor_works: i8,
-        min_y: i32,
-        height: i32,
-        logical_height: i32,
-        infiniburn: String,
-        effects: String,
-        ambient_light: f32,
-        piglin_safe: i8,
-        has_raids: i8,
-        monster_spawn_light_level: dimension_type::LightLevel,
-        monster_spawn_block_light_limit: i32,
+        #[serde(deserialize_with = "byte_from_bool")]
+        has_skylight: i8,//
+        #[serde(deserialize_with = "byte_from_bool")]
+        has_ceiling: i8,//
+        #[serde(deserialize_with = "byte_from_bool")]
+        ultrawarm: i8,//
+        #[serde(deserialize_with = "byte_from_bool")]
+        natural: i8,//
+        coordinate_scale: f64,//
+        #[serde(deserialize_with = "byte_from_bool")]
+        bed_works: i8,//
+        #[serde(deserialize_with = "byte_from_bool")]
+        respawn_anchor_works: i8,//
+        min_y: i32,//
+        height: i32,//
+        logical_height: i32,//
+        infiniburn: String,//
+        effects: String,//
+        ambient_light: f32,//
+        #[serde(deserialize_with = "byte_from_bool")]
+        piglin_safe: i8,//
+        #[serde(deserialize_with = "byte_from_bool")]
+        has_raids: i8,//
+        monster_spawn_light_level: dimension_type::LightLevel,//
+        monster_spawn_block_light_limit: i32,//
     },
+
+    BannerPattern {
+        asset_id: String,
+        translation_key: String,
+    },
+
+    WolfVariant {
+        wild_texture: String,
+        tame_texture: String,
+        angry_texture: String,
+        biomes: wolf_variant::Biomes,
+    }
 }
+
 
 
 pub fn get_registry() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
@@ -111,18 +197,60 @@ pub fn get_registry() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     Ok(u)
 }
 
-pub fn get_registry_nbt() -> Result<NBT, NbtIoError> {
-    serialize(
+pub fn get_registry_nbt(registry_name: &str) -> Result<Vec<NBTifiedRegistryEntry>, NbtIoError> {
+    let mut i = 0;
+    let mut registry_entries: Vec<RegistryEntry> = Vec::new();
+
+    std::fs::read_dir(format!("generated/data/minecraft/{}", registry_name)).unwrap()
+    .map(|f| f.unwrap().path())
+    .filter(|f| f.is_file())
+    .sorted_by(|p, p2| {
+        p.cmp(p2)
+    })
+    .map(|p| (p.clone(), File::open(p).unwrap()))
+    .for_each(|(p, f)| {
+        registry_entries.push(RegistryEntry {
+            name: format!("minecraft:{}", p.file_stem().unwrap().to_str().unwrap()),
+            id: i,
+            element: serde_json::from_reader(f).unwrap(),
+        });
+        i += 1;
+    });
+
+
+    let mut nbtified_entries = Vec::new();
+    registry_entries.sort_by(|e1, e2| e1.name.cmp(&e2.name));
+    for entry in registry_entries {
+        match serialize(&entry.element, None, Flavor::Uncompressed) {
+            Ok(mut x) => {
+                x.drain(0..2);
+                x[0] = 10u8;
+                nbtified_entries.push(NBTifiedRegistryEntry {
+                    entry_identifier: entry.name,
+                    data: x,
+                });
+                
+            },
+            Err(e) => { 
+                return Err(e); 
+            },
+        }
+    }
+    Ok(nbtified_entries)
+    /*serialize(
         &serde_json::de::from_str::<HashMap<String, Registry>>(get_registry().unwrap().to_string().as_str()).unwrap(), 
         None, 
-        Flavor::Uncompressed)
+        Flavor::Uncompressed)*/
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{fs, io::Read};
+
     use serde::ser::Serialize;
 
 
+    use serde_json::from_reader;
     use test::Bencher;
 
     use super::*;
@@ -131,9 +259,56 @@ mod tests {
 
         //let the_json = get_registry().unwrap().to_string();
         //let jd = &mut serde_json::Deserializer::from_str(the_json.as_str());
-        let registry_data: RegistryData = RegistryData{
-            data: serde_json::de::from_str(get_registry().unwrap().to_string().as_str()).unwrap(),
+
+
+        let dirs = vec![
+            "trim_pattern", 
+            "trim_material", 
+            "worldgen/biome",
+            "chat_type",
+            "damage_type",
+            "dimension_type",
+            "banner_pattern",
+            "wolf_variant",
+        ];
+        let mut registries: HashMap<String, Registry> = HashMap::with_capacity(dirs.len());
+        
+        dirs.into_iter().for_each(|dir| {
+            let mut i = 0;
+            let mut registry_entries: Vec<RegistryEntry> = Vec::new();
+
+            fs::read_dir(format!("generated/data/minecraft/{}", dir)).unwrap()
+            .map(|f| f.unwrap().path())
+            .filter(|f| f.is_file())
+            .sorted_by(|p, p2| {
+                p.cmp(p2)
+            })
+            .map(|p| (p.clone(), File::open(p).unwrap()))
+            .for_each(|(p, f)| {
+                println!("registry: {}",dir);
+                println!("{}",fs::read_to_string(p.clone()).unwrap());
+                registry_entries.push(RegistryEntry {
+                    name: format!("minecraft:{}", p.file_stem().unwrap().to_str().unwrap()),
+                    id: i,
+                    element: serde_json::from_reader(f).unwrap(),
+                });
+                i += 1;
+            });
+
+            registries.insert(format!("minecraft:{}", dir), Registry { 
+                r#type: format!("minecraft:{}",dir), value: registry_entries
+            });
+        });
+
+        let registry_data: RegistryData = RegistryData {
+            data: registries,
         };
+        
+        /*RegistryData{
+            data: serde_json::de::from_str(get_registry().unwrap().to_string().as_str()).unwrap(),
+        };*/
+
+        
         
         println!("{:#?}", registry_data);
         
@@ -147,21 +322,21 @@ mod tests {
     }
     #[test]
     fn construct_nbt() {
-        let registry_data: RegistryData = RegistryData{
-            data: serde_json::de::from_str(get_registry().unwrap().to_string().as_str()).unwrap(),
-        };
+        //let registry_data: RegistryData = RegistryData{
+        //    data: serde_json::de::from_str(get_registry_nbt("trim_pattern").unwrap().data.to_string().as_str()).unwrap(),
+        //};
 
 
 
 
-        let mut serialized = quartz_nbt::serde::serialize(&registry_data.data, None, quartz_nbt::io::Flavor::Uncompressed).unwrap();
+        //let mut serialized = quartz_nbt::serde::serialize(&registry_data.data, None, quartz_nbt::io::Flavor::Uncompressed).unwrap();
 
-        serialized.drain(0..2);
-        serialized[0] = 10u8;
+        //serialized.drain(0..2);
+        //serialized[0] = 10u8;
         
 
         //println!("{:?}", serialized);
-        println!("{:?}", serialized);
+        //println!("{:?}", serialized);
         println!();
     }
 

@@ -6,10 +6,12 @@ use log::debug;
 use server_util::ConnectionState;
 use tokio::time;
 
-use crate::packet::configuration::*;
+use crate::data_types::datapack::DataPackID;
+use crate::data_types::{Identifier, IdentifierArray, VarInt};
+use crate::packet::{configuration::*, Clientbound};
 use crate::player::Player;
 use crate::state::play_state::play_state;
-use crate::SPacket;
+use crate::{SPacket, THE_SERVER};
 
 
 pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
@@ -22,20 +24,78 @@ pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
     //TODO: Handle plugin message.
     //TODO: Handle Client Information.
     //TODO: Clientbound plugin message
-    //TODO: Feature Flags
 
-    debug!("sending registry data");
 
-    match player_ref.send_packet(CRegistryData::new()).await {
+    match player_ref.send_packet(CFeatureFlags::new(
+        IdentifierArray::new(vec![Identifier::new("minecraft:vanilla").unwrap()])
+    )).await {
         Ok(_) => (),
         Err(e) => {
             player_ref.disconnect(e.to_string().as_str()).await;
             return;
-        },
+        }
     }
+
+    debug!("sending known packs");
+
+    match player_ref.send_packet(CKnownPacks::new(
+        vec![DataPackID::new("minecraft".to_owned(), "core".to_owned(), "v1.21".to_owned())]
+    )).await {
+        Ok(_) => (),
+        Err(e) => {
+            player_ref.disconnect(e.to_string().as_str()).await;
+            return;
+        }
+    }
+
+    debug!("sent known packs, waiting for known packs packet");
+
+    match filter_packets_until_s_known_packs(player_ref.clone()).await {
+        Ok(_) => (),
+        Err(e) => {
+            player_ref.disconnect(e.to_string().as_str()).await;
+            return;
+        }
+    }
+
+    debug!("received known packs");
+
+
+    debug!("sending registry data");
+
+    for registry_name in crate::REGISTRIES {
+        debug!("sent a registry data packet:{}", registry_name);
+        let packet = CRegistryData::new(registry_name);
+        //debug!("{:?}", String::from_utf8(packet.to_be_bytes()));
+        match player_ref.send_packet(packet).await {
+            Ok(_) => (),
+            Err(e) => {
+                player_ref.disconnect(e.to_string().as_str()).await;
+                return;
+            },
+        }
+    }
+    
     debug!("Sent registry data");
     
-    //TODO: Update Tags
+    
+    debug!("sending tags");
+    match player_ref.send_packet(CUpdateTags::new(crate::REGISTRY_TAGS.clone())).await {
+        Ok(_) => (),
+        Err(e) => {
+            player_ref.disconnect(e.to_string().as_str()).await;
+            return;
+        }
+    }
+    debug!("sent tags");
+
+    
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+
+    debug!("sending CFinishConfig");
+
     match player_ref.send_packet(CFinishConfig::new()).await {
         Ok(_) => (),
         Err(e) => {
@@ -43,6 +103,8 @@ pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
             return;
         }
     }
+
+    debug!("sent CFinishConfig");
 
     //TODO: Handle these packets accordingly.
     match filter_packets_until_s_acknowledge_finish_config(player_ref.clone()).await {
@@ -59,14 +121,33 @@ pub(in crate::state) async fn configuration_state(player_ref: Arc<Player>) {
 }
 
 async fn filter_packets_until_s_acknowledge_finish_config(player_ref: Arc<Player>) -> Result<(), Box<dyn Error + Send + Sync>> {
-    for _ in 0..3 {
+    loop {
         match player_ref.read_next_packet().await {
             Ok(packet) => {
                 debug!("Found packet: {:?}", packet);
                 match packet {
                     SPacket::SPluginMessage_Config(_) => continue,
                     SPacket::SClientInformation_Config(_) => continue,
+                    SPacket::SKnownPacks(_) => continue,
                     SPacket::SAcknowledgeFinishConfig(_) => return Ok(()),
+                    _ => return Err(format!("Wrong packet: {:?}!", packet))?
+                }
+            }
+            Err(e) => return Err(Box::new(e)),
+        }
+    }
+    Err("Did not find SAcknowledgeFinishConfig!")?
+}
+
+async fn filter_packets_until_s_known_packs(player_ref: Arc<Player>) -> Result<(), Box<dyn Error + Send + Sync>> {
+    loop {
+        match player_ref.read_next_packet().await {
+            Ok(packet) => {
+                debug!("Found packet: {:?}", packet);
+                match packet {
+                    SPacket::SPluginMessage_Config(_) => continue,
+                    SPacket::SClientInformation_Config(_) => continue,
+                    SPacket::SKnownPacks(_) => return Ok(()),
                     _ => return Err(format!("Wrong packet: {:?}!", packet))?
                 }
             }

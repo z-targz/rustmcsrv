@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{ToProtocol, NBT};
 
+
 trait TextComponentType {}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]

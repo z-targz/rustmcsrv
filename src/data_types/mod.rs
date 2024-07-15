@@ -3,22 +3,27 @@ use std::error::Error;
 use server_util::error::ProtocolError;
 
 pub mod registry;
+pub mod tags;
 
 pub mod angle;
 pub mod chunk;
+pub mod datapack;
 pub mod death_location;
 pub mod identifier;
+pub mod identifier_array;
 pub mod prefixed_byte_array;
 pub mod inferred_byte_array;
 pub mod nbt;
 pub mod position;
 pub mod property_array;
 pub mod statistic_array;
+pub mod tag;
 pub mod text_component;
 pub mod var_ushort;
 pub mod var_int;
 pub mod var_long;
 pub mod vec_3d;
+
 
 pub mod data_types;
 
@@ -29,6 +34,7 @@ pub use {
     chunk::ProtocolChunk,
     death_location::DeathLocation,
     identifier::Identifier, 
+    identifier_array::IdentifierArray,
     prefixed_byte_array::PrefixedByteArray,
     inferred_byte_array::InferredByteArray,
 

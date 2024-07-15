@@ -33,13 +33,13 @@ pub(in crate::state) async fn status_state(mut connection: Connection) {
                 SPacket::SStatusRequest(_) => (),
                 _ => {
                     debug!("{addr} > Incorrect packet...");
-                    connection.drop();
+                    connection.drop().await;
                     return;
                 }
             }
         },
         Err(_) => {
-            connection.drop();
+            connection.drop().await;
             return;
         }
     }
@@ -53,7 +53,7 @@ pub(in crate::state) async fn status_state(mut connection: Connection) {
         Ok(_) => (),
         Err(_) => {
             println!("{addr} > Error sending packet!");
-            connection.drop();
+            connection.drop().await;
             return;
         }
     };
@@ -72,13 +72,13 @@ pub(in crate::state) async fn status_state(mut connection: Connection) {
                 _ => {
                     //Incorrect packet
                     debug!("{addr} > Incorrect packet");
-                    connection.drop();
+                    connection.drop().await;
                     return;
                 }
             }
         },
         Err(_) => {
-            connection.drop();
+            connection.drop().await;
             return;
         }
     }
@@ -91,12 +91,12 @@ pub(in crate::state) async fn status_state(mut connection: Connection) {
         Ok(_) => (),
         Err(_) => {
             debug!("{addr} > Unable to send packet SPingResponse_Status");
-            connection.drop();
+            connection.drop().await;
             return;
         }
     };
 
-    connection.drop();
+    connection.drop().await;
     debug!("Connection Closed: {addr}.");
     return;
 }
@@ -120,8 +120,8 @@ fn generate_status_response() -> CStatusResponse {
     let favicon_str = format!("data:image/png;base64,{}", result);
     CStatusResponse::new(json!({
         "version": {
-            "name": "1.20.1",
-            "protocol": 765
+            "name": "1.21",
+            "protocol": 767
         },
         "players": {
             "max": max_players as i32,

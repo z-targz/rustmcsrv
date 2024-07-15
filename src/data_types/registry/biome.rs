@@ -1,4 +1,5 @@
 use serde::{Serialize, Deserialize};
+use super::registry;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Effects {
@@ -77,6 +78,24 @@ pub struct Music {
     sound: String,
     min_delay: i32,
     max_delay: i32,
+    #[serde(deserialize_with = "registry::byte_from_bool")]
     replace_current_music: i8,
 }
 
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Spawn {
+    r#type: String,
+    #[serde(rename = "maxCount")]
+    max_count: i32,
+    #[serde(rename = "minCount")]
+    min_count: i32,
+    weight: i32,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(untagged)]
+pub enum Carvers {
+    VecOfStrings(Vec<String>),
+    JustAString(String),
+}

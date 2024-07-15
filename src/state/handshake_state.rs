@@ -18,8 +18,6 @@ pub(in crate) async fn handshake_state(mut connection: Connection) {
         Ok(s_packet) => {
             match s_packet {
                 SPacket::SHandshake(packet) => {
-                    
-
                     debug!("{addr} > Handshake Successful!");
                     debug!("{addr} > Protocol Version: {}", packet.get_protocol_version());
                     debug!("{addr} > Hostname used to connect: {}", packet.get_server_address());
@@ -36,21 +34,21 @@ pub(in crate) async fn handshake_state(mut connection: Connection) {
                         _ => {
                             //Invalid login state. 
                             //This will never happen with a vanilla client unless something goes terribly wrong.
-                            connection.drop();
+                            connection.drop().await;
                             return;
                         }
                     }
                 }
                 _ => {
                     //Incorrect packet
-                    connection.drop();
+                    connection.drop().await;
                     return;
                 }
             }
         },
         Err(_) => {
             //Error reading packet
-            connection.drop();
+            connection.drop().await;
             return;
         }
     }

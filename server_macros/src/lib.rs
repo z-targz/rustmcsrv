@@ -235,6 +235,7 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
             "InferredByteArray" => "&",
             "PropertyArray" => "&",
             "DeathLocation" => "&",
+            "Vec<DataPackID>" => "&",
             _ => "",
         }
     }
@@ -252,6 +253,12 @@ fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
             getters += format!("pub fn get_{field_name}(&self) -> Option<{b}{option_type}> {{ self.{field_name}{} }}", if b == "&" {".as_ref()"} else {""}).as_str();
 
             let_reads += format!("let {field_name}: Option<{option_type}> = read_option(iter)?;").as_str();
+        } else if field_type.starts_with("Vec") {
+            let b = borrow(field_type.as_str());
+            getters += format!("pub fn get_{field_name}(&self) -> &{field_type} {{ &self.{field_name} }}").as_str();
+
+            let_reads += format!("let {field_name}: {field_type} = Vec::from_protocol_iter(iter)?;").as_str();
+        
         } else {
             let b = borrow(field_type.as_str());
             getters += format!("pub fn get_{field_name}(&self) -> {b}{field_type} {{ {b}self.{field_name} }}").as_str();

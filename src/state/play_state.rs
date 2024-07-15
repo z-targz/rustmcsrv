@@ -7,9 +7,10 @@ use tokio::time;
 use tokio::sync::mpsc;
 
 use crate::data_types::text_component::Formatting;
-use crate::data_types::TextComponent;
+use crate::data_types::{Identifier, TextComponent, VarInt};
 use crate::player::Player;
 use crate::packet::{SPacket, play::*};
+use crate::THE_SERVER;
 
 pub(in crate::state) async fn play_state(player_ref: Arc<Player>) {
     let mut lock = player_ref.get_connection().write().await;
@@ -44,6 +45,41 @@ pub(in crate::state) async fn play_state(player_ref: Arc<Player>) {
                     .formatting(Formatting::builder().color(0x4).obfuscated(true).build())
                     .build()
             ).build();
+
+    debug!("sending login play packet");
+    match player_ref.send_packet(CLogin_Play::new(
+        1, 
+        false, 
+        VarInt::new(3), 
+        vec![
+            Identifier::new("minecraft:overworld").unwrap(), 
+            Identifier::new("minecraft:the_nether").unwrap(), 
+            Identifier::new("minecraft:the_end").unwrap()
+        ],
+        VarInt::new(THE_SERVER.get_properties().get_max_players()),
+        VarInt::new(THE_SERVER.get_properties().get_view_distance()),
+        VarInt::new(THE_SERVER.get_properties().get_simulation_distance()),
+        false,
+        true,
+        false,
+        VarInt::new(0),
+        Identifier::new("minecraft:overworld").unwrap(),
+        4297447447117712613,
+        1,
+        1,
+        false,
+        false,
+        None,
+        VarInt::new(0),
+        false
+    )).await {
+        Ok(_) => (),
+        Err(e) => {
+            player_ref.disconnect(e.to_string().as_str()).await;
+            return;
+        }
+    }
+    debug!("send login play complete");
 
     player_ref.disconnect_tc(reason).await;
 

@@ -15,9 +15,13 @@ extern crate itertools;
 
 
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use data_types::registry::NBTifiedRegistryEntry;
+use data_types::tag::TagRegistry;
+use data_types::NBT;
 use tokio::runtime::Runtime;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
@@ -56,6 +60,25 @@ mod entity;
 
 
 const TIMEOUT: Duration = Duration::from_secs(10);
+const REGISTRIES: [&str;8] = [
+    "worldgen/biome",
+    "chat_type",
+    "trim_pattern", 
+    "trim_material", 
+    "wolf_variant",
+    "dimension_type",
+    "damage_type",
+    "banner_pattern",
+];
+
+const TAGS: [&str;5] = [
+    "block",
+    "item",
+    "fluid",
+    "entity_type",
+    "game_event",
+];
+
 
 lazy_static!{
     pub static ref MOTD: String = "A Minecraft Server (§cMade with Rust!§r)".to_string();
@@ -64,7 +87,14 @@ lazy_static!{
         std::process::exit(1);
     }));
     pub static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread().enable_time().enable_io().build().unwrap();
-    pub static ref REGISTRY_NBT: Vec<u8> = data_types::registry::get_registry_nbt().unwrap();
+    
+    pub static ref REGISTRY_NBT: HashMap<String, Vec<NBTifiedRegistryEntry>> = 
+        REGISTRIES.iter().map(|registry_name| {
+            (registry_name.to_string(), data_types::registry::get_registry_nbt(registry_name).unwrap())
+        }).collect();
+        
+    pub static ref REGISTRY_TAGS: Vec<TagRegistry> = TAGS.iter().map(|tags| TagRegistry::new(tags)).collect();
+
     pub static ref CONSOLE: Console = Console::new().unwrap();
 }
 #[tokio::main]

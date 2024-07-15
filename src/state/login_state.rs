@@ -86,13 +86,13 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
                 },
                 _ => {
                     println!("Incorrect packet.");
-                    connection.drop();
+                    connection.drop().await;
                     return;
                 }
             }
         },
         Err(_) => {
-            connection.drop();
+            connection.drop().await;
             return;
         }
     }
@@ -103,7 +103,8 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
     match player_ref.send_packet(CLoginSuccess::new(
         player_ref.get_uuid(), 
         player_ref.get_name().clone(), 
-        get_player_property_array(player_ref.get_uuid()).await
+        get_player_property_array(player_ref.get_uuid()).await,
+        false
     )).await {
         Ok(_) => (),
         Err(_) => {

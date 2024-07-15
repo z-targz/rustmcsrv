@@ -142,7 +142,7 @@ impl<'a> Player {
                 },
                 server_util::ConnectionState::Configuration => {
                     timeout(TIMEOUT, self.send_packet(
-                        CDisconnect_Config::new(format!("'{}'", reason.get_text().unwrap()))
+                        CDisconnect_Config::new(reason)
                     )).await.unwrap_or(Ok(())).unwrap_or(())
                 },
                 server_util::ConnectionState::Play => {

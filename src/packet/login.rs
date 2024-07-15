@@ -34,6 +34,7 @@ pub struct CLoginSuccess {
     uuid: Uuid,
     username: String,
     properties: PropertyArray,
+    strict_error_handling: bool,
 }
 
 #[derive(CPacket)]
