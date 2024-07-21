@@ -1,10 +1,11 @@
 
-pub mod entity_data;
-pub mod entity_base;
+pub mod tags;
+pub mod entity;
 pub mod living_entity;
 pub mod aabb;
+pub mod potion_effect;
 
-pub enum EntityType {
-    Player,
-    Item,
-}
+pub mod entities;
+
+pub use tags::*;
+pub use entity::*;

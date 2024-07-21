@@ -1,4 +1,4 @@
-// 1.21	2024-07-15T16:04:55.975055696	vanilla/Tags for minecraft:item
+// 1.21	2024-07-17T16:31:24.254290416	vanilla/Tags for minecraft:item
 82edd6d1ec8e7fe75b955b3a41a45d38cc77c262 data/minecraft/tags/item/wolf_food.json
 c573efc219c198638b6916e5de42b196f8267a1e data/minecraft/tags/item/horse_tempt_items.json
 a91a14b0d844c2e8beb882a51072178e0667620c data/minecraft/tags/item/jungle_logs.json
@@ -6,8 +6,8 @@ d795677dfa226e3d5f7f602fd7e9d9e7a55ee61b data/minecraft/tags/item/small_flowers.
 78634c7ac229f0d8a48e462b3aa5e0b3892be46e data/minecraft/tags/item/horse_food.json
 644d4f67864112c3d8f4fcf42290bc8f7f11db2d data/minecraft/tags/item/enchantable/vanishing.json
 105727dc444ddc319293c250e6c64f197b4ba151 data/minecraft/tags/item/frog_food.json
-5077a13d64733dabbf06096540da79548431f405 data/minecraft/tags/item/saplings.json
 d19277bda7fab58f7d36ca6d828bbaaa6531b042 data/minecraft/tags/item/gold_ores.json
+5077a13d64733dabbf06096540da79548431f405 data/minecraft/tags/item/saplings.json
 4161727d1e5d26faf957fabebe6b6c8cc6e884f2 data/minecraft/tags/item/leaves.json
 49fc3802397b9999fbbc71f9d4e9c1962cab6506 data/minecraft/tags/item/anvil.json
 bf441ab5887aa8996fea95ba8ba8baf3ef5598c7 data/minecraft/tags/item/foot_armor.json
@@ -24,8 +24,8 @@ bc8f7ec42055271500d0f99c97af042d8e284272 data/minecraft/tags/item/enchantable/ar
 c3344f6e568a707914a420dacbf9b082a8ff1787 data/minecraft/tags/item/stone_bricks.json
 64cced731059717fbae6969a456ba5a8fe08d5ad data/minecraft/tags/item/bookshelf_books.json
 f44e286dddebca1577f70e0e424c3109c07170fb data/minecraft/tags/item/piglin_loved.json
-daec9f32b34c685d972f66ea58ffc7ef3fc977a5 data/minecraft/tags/item/wooden_fences.json
 3e070569b31d1100ac334efd44a58e52df25df1a data/minecraft/tags/item/flowers.json
+daec9f32b34c685d972f66ea58ffc7ef3fc977a5 data/minecraft/tags/item/wooden_fences.json
 5271e7aa01a851b891fdc27fcc241414309798ee data/minecraft/tags/item/chest_armor.json
 3970b76be7ae4036da7a0d208370acfa1fc1577c data/minecraft/tags/item/birch_logs.json
 91c876271eaad016f609198a3c95f649ddc3344a data/minecraft/tags/item/hoes.json
@@ -42,8 +42,8 @@ e6756cdd6fb03cf772eba210ae3f93335e83dcd6 data/minecraft/tags/item/enchantable/sw
 d9902302dcd6c7d67acfc5bb641cbae30cf3d03c data/minecraft/tags/item/enchantable/weapon.json
 0d7a4c11ebf0aae0af19bacbd70cea4cdca1a342 data/minecraft/tags/item/enchantable/bow.json
 45aac43b276cae0f4b4ca7dccad68ee2cf4f1ca9 data/minecraft/tags/item/sand.json
-4b636e8a202b80de17ec8352bba191763ed63d3c data/minecraft/tags/item/wooden_doors.json
 c998cf5cbc50fe6ebff96350e415e3db67a94c6b data/minecraft/tags/item/wooden_pressure_plates.json
+4b636e8a202b80de17ec8352bba191763ed63d3c data/minecraft/tags/item/wooden_doors.json
 885d31455883795cf973f9a3096f1094799602bd data/minecraft/tags/item/pickaxes.json
 1ae902776b0942fb7f6424ba52eb2150950f973c data/minecraft/tags/item/acacia_logs.json
 b8301ea44cd37172345daf7b728de0a78e6ad149 data/minecraft/tags/item/bamboo_blocks.json
@@ -79,8 +79,8 @@ bdb1ff9fc8b24f737e3d121d711574e8d779a3ff data/minecraft/tags/item/beacon_payment
 f8fefc25b1df4fbf75b2f1db5237ce04d2d50cc1 data/minecraft/tags/item/parrot_food.json
 b197c522c5d1bf863432ab04a9c9b18fa9e8ced7 data/minecraft/tags/item/axolotl_food.json
 6f62a3e03de3843da6fc2f7b46bfdd5d1f4fd02d data/minecraft/tags/item/compasses.json
-5a1da22b7562d3101cd95b2874ef21e709215ca8 data/minecraft/tags/item/beds.json
 642497f10f9b4cd17f0596ccd068a662779a5143 data/minecraft/tags/item/logs_that_burn.json
+5a1da22b7562d3101cd95b2874ef21e709215ca8 data/minecraft/tags/item/beds.json
 578dd629e6c69bf5641983afdf5f54ca2d3b5882 data/minecraft/tags/item/panda_food.json
 71180030d3ebe73ed7aa07473fb200e0aa359909 data/minecraft/tags/item/candles.json
 af26b6f8afbcb74c6e990850cb8baf45137075f4 data/minecraft/tags/item/dirt.json

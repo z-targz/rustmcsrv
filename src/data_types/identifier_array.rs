@@ -1,6 +1,4 @@
-use server_util::error::ProtocolError;
-
-use super::{FromProtocol, Identifier, ToProtocol, VarInt};
+use super::{Identifier, ToProtocol, VarInt};
 
 
 pub struct IdentifierArray {

@@ -1,0 +1,31 @@
+[package]
+name = "macroception"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0"
+proc-macro2 = "1.0"
+server_util = { path = "../server_util" }
+base64 = "0.22.0"
+lazy_static = "1.4.0"
+seq-macro = "0.3.5"
+convert_case = "0.6.0"
+
+[dependencies.syn]
+version = "2.0"
+features = [
+    "parsing",
+]
+
+[dependencies.serde]
+version = "1.0.197"
+features = [
+    "derive"
+]
+
+[dependencies.serde_json]
+version = "=1.0.1"

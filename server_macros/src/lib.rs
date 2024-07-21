@@ -3,41 +3,351 @@
 extern crate proc_macro;
 extern crate seq_macro;
 
+
+use std::fs::File;
+use std::io::Read;
+use std::ops::Add;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::collections::HashMap;
 
+use convert_case::Case;
+use convert_case::Casing;
+use itertools::Itertools;
 use proc_macro::TokenStream;
+
 
 use quote::quote;
 
 use quote::ToTokens;
-use quote::TokenStreamExt;
-use syn::LitInt;
-use syn::MetaList;
+
+use registry::Mapping;
 use syn::Data;
 use syn::DataStruct;
 use syn::Fields;
 use syn::parse_macro_input;
+use syn::FieldsNamed;
+use syn::Ident;
 use syn::LitStr;
 
-use seq_macro::seq;
-
 use server_util::ConnectionState;
-use server_util::PropertyType;
 
 use base64::prelude::*;
 
 use lazy_static::lazy_static;
 
-lazy_static!{
-    static ref HANDSHAKE_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
-    static ref STATUS_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
-    static ref LOGIN_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
-    static ref CONFIGURATION_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
-    static ref PLAY_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
+mod registry;
+mod entity;
+mod packet;
 
-    static ref PROPERTY_TYPES: Mutex<HashMap<String, PropertyType>> = Mutex::new(HashMap::new());
+lazy_static!{
+    // static ref HANDSHAKE_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
+    // static ref STATUS_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
+    // static ref LOGIN_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
+    // static ref CONFIGURATION_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
+    // static ref PLAY_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
+
+    // static ref ENTITIES: Mutex<HashMap<(String, Vec<String>, Vec<(String, String, Vec<String>)>), Vec<String>>> = Mutex::new(HashMap::new());
+
+    // static ref REGISTRY: Mutex<HashMap<String, Mapping>> = Mutex::new(registry::read_registry_json());
 }
+
+static HANDSHAKE_PACKETS: LazyLock<Mutex<HashMap<i32, String>>> = LazyLock::new(|| {
+    Mutex::new(HashMap::new())
+});
+static STATUS_PACKETS: LazyLock<Mutex<HashMap<i32, String>>> = LazyLock::new(|| {
+    Mutex::new(HashMap::new())
+});
+static LOGIN_PACKETS: LazyLock<Mutex<HashMap<i32, String>>> = LazyLock::new(|| {
+    Mutex::new(HashMap::new())
+});
+static CONFIGURATION_PACKETS: LazyLock<Mutex<HashMap<i32, String>>> = LazyLock::new(|| {
+    Mutex::new(HashMap::new())
+});
+static PLAY_PACKETS: LazyLock<Mutex<HashMap<i32, String>>> = LazyLock::new(|| {
+    Mutex::new(HashMap::new())
+});
+
+static ENTITIES: LazyLock<Mutex<HashMap<
+    (
+        String, 
+        Vec<String>, 
+        Vec<(String, String, Vec<String>)>
+    ), 
+    Vec<String>
+>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+static REGISTRY: LazyLock<Mutex<HashMap<String, Mapping>>> = LazyLock::new(|| {
+    Mutex::new(registry::read_registry_json())
+});
+
+/*
+#[proc_macro_derive(EntityBase)]
+pub fn derive_entity_base(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+    entity::register_entity_tag(&ast, "EntityBase");
+    quote!{}.into()
+}*/
+
+
+
+#[proc_macro_derive(EntityTrait, attributes(macroception))]
+pub fn derive_entity_trait(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+
+    let (
+        name, 
+        fields,
+    ) = impl_entity_trait(&ast);
+    
+    let name = name.to_string();
+
+    
+
+    //let mut lock = TRAIT_NAMES.lock().unwrap();
+    //lock.push(name.clone());
+    //drop(lock);
+
+    // let mut getters: Vec<String> = Vec::new();
+    // let mut setters: Vec<String> = Vec::new();
+    
+    for field in &fields.named {
+        field.attrs.iter().filter_map(|attr| {
+            match &attr.meta {
+                syn::Meta::Path(_) => None,
+                syn::Meta::List(l) => {
+                    match l.path.get_ident().unwrap().to_string().as_str() {
+                        "server_macros" => {
+                            Some(&l.tokens)
+                        }
+                        _ => None
+                    }
+                },
+                syn::Meta::NameValue(_) => None,
+            }
+        })
+        
+        .for_each(|token_stream| {
+            let stream: Result<syn::Expr, syn::Error> = syn::parse(token_stream.clone().into());
+            match stream {
+                Ok(expr) => {
+                    let expression = expr.to_token_stream().to_string();
+                    if expression != "skip" {
+                        if expression != "skip_getter" {
+                            //todo!()
+                        }
+                        if expression != "skip_setter" {
+                            //todo!()
+                        }
+                    }
+                },
+                Err(_) => (),
+            }
+        });
+    }    
+    
+    let trait_name: proc_macro2::TokenStream = 
+        String::from("Trait")
+            .add(name.to_string().as_str())
+            .parse()
+            .unwrap();
+
+    let name: proc_macro2::TokenStream = name.parse().unwrap();
+    quote!{
+        pub trait #trait_name {
+
+        }
+
+        impl #trait_name for #name {
+            
+        }
+    }.into()
+}
+
+fn impl_entity_trait(ast: &syn::DeriveInput) -> (&Ident, &FieldsNamed) {
+    let fields = match &ast.data {
+        Data::Struct(DataStruct{ 
+            fields: Fields::Named(it), 
+            struct_token : _, 
+            semi_token : _ }
+        ) => it,
+        Data::Struct(_) => panic!("Expected a `struct` with named fields."),
+        Data::Enum(_) | Data::Union(_) => panic!("#[Derive(EntityTrait)] is only implemented for `struct`s."),
+    };
+    
+    (&ast.ident, fields)
+}
+
+#[proc_macro]
+pub fn pack_registry_json_files(_: TokenStream) -> TokenStream {
+    const REGISTRIES: [&str;9] = [
+        "worldgen/biome",
+        "chat_type",
+        "trim_pattern", 
+        "trim_material", 
+        "wolf_variant",
+        "dimension_type",
+        "damage_type",
+        "banner_pattern",
+        "painting_variant",
+    ];
+
+    let data =  REGISTRIES
+        .iter()
+        .map(|registry_name| {
+            let keys = get_json_map(registry_name).unwrap()
+                .into_iter()
+                .map(|(k, v)| {
+                    quote!{#k.to_owned() => #v.to_owned(),}
+                })
+                .fold(proc_macro2::TokenStream::new(), |t1, t2| {
+                    let mut out: proc_macro2::TokenStream = t1.clone().into();
+                    out.extend(t2.into_iter());
+                    out
+                });
+            quote!{
+                #registry_name.to_owned()=>hashmap!{#keys},
+            }
+        })
+        .fold(proc_macro2::TokenStream::new(), |t1, t2| {
+            let mut out: proc_macro2::TokenStream = t1.clone().into();
+            out.extend(t2.into_iter());
+            out
+        });
+
+    let out = quote!{
+        hashmap!{#data}
+    };
+
+    //panic!("{}",out.to_string());
+
+    out.into()
+}
+
+fn get_json_map(registry_name: &str) -> Result<HashMap<String, String>, std::io::Error> {
+    let cargo_manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let path = Path::new(cargo_manifest_dir.as_str())
+        .join("generated")
+        .join("data")
+        .join("minecraft")
+        .join(registry_name);
+    let files = std::fs::read_dir(path).unwrap();
+    files.into_iter()
+        .map(|result| result.unwrap().path())
+        .filter(|f| f.is_file())
+        .sorted_by(|p, p2| p.cmp(p2))
+        .map(|p| Ok((p.clone(), File::open(p)?)))
+        .collect::<Result<Vec<(PathBuf, File)>, std::io::Error>>()?.into_iter()
+        .map(|(p, mut f)| {
+            let the_name = format!("minecraft:{}", p.file_stem().unwrap().to_str().unwrap());
+            let mut out = String::new();
+            f.read_to_string(&mut out)?;
+            Ok((the_name, out))
+        }).collect()
+}
+
+macroception::create_entity_macros!{}
+
+#[proc_macro]
+pub fn generate_entity_id_enum(_: TokenStream) -> TokenStream {
+    generate_registry_enum("minecraft:entity_type").into()
+}
+
+#[proc_macro]
+pub fn generate_potion_effect_id_enum(_: TokenStream) -> TokenStream {
+    generate_registry_enum("minecraft:mob_effect").into()
+}
+
+fn generate_registry_enum(registry: &str) -> TokenStream {
+    let binding = REGISTRY.lock().unwrap();
+    let mappings = binding.get(registry).unwrap().get_mappings();
+    let mut mapping_vec = mappings.into_iter().map(|(k, v)| (k.clone(), *v)).collect::<Vec<(String, i32)>>();
+    mapping_vec.sort_by(|a, b| a.1.cmp(&(b.1)));
+
+    let mut body = String::new();
+
+    mapping_vec
+        .into_iter()
+        .map(|(k, v)| (k.clone(), k.split(':').last().unwrap().to_case(Case::Pascal), v)) //remove namespace and format
+        .for_each(|(mc, k, v)| {
+            body += (format!("
+                #[serde(rename = \"{mc}\")]
+                {k} = {v},
+            ")).as_str()
+        });
+        
+    let body: proc_macro2::TokenStream = body.parse().unwrap();
+
+    let enum_name = (String::from("enum_") + registry.split(':').last().unwrap_or_else(|| {
+        let registries_json_path = 
+            Path::new("generated")
+                .join("reports")
+                .join("registries.json");
+        panic!(
+            "Error: registry {registry} is not a valid entry in \"{path}\".",
+            path=registries_json_path.to_str().unwrap()
+        )
+    })).to_case(Case::Pascal);
+
+    let enum_name: proc_macro2::TokenStream = enum_name.parse().unwrap();
+
+    quote!{
+        #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+        pub enum #enum_name {
+            #body
+        }
+    }.into()
+}
+
+
+#[proc_macro]
+pub fn create_entity_enum(_: TokenStream) -> TokenStream {
+    
+    let mut variants = String::new();
+    let lock = ENTITIES.lock().unwrap();
+    for ((name, attrs, fields), tags) in lock.iter() {
+
+        let mut body = String::new();
+
+        (0..tags.len()).for_each(|i| {
+            body += (format!("
+            #[serde(flatten)]
+            __field_{i}: {tag},
+            ", tag=tags.get(i).unwrap())).as_str()
+        });
+
+        for (name, r_type, field_attrs) in fields {
+            body += (format!("
+            {attributes}
+            {name}: {r_type},
+            ", attributes=field_attrs.join("\n"))).as_str()
+        }
+
+        variants += (format!("
+            {attributes}
+            {name} {{
+                {body}
+            }}
+        ",attributes=attrs.join("\n"))).as_str();
+    }
+    
+    let variants: proc_macro2::TokenStream = variants.parse().unwrap();
+
+    quote!{
+        #[derive(Serialize, Deserialize, Debug, Clone)]
+        #[serde(untagged)]
+        pub enum Entity {
+            EntityBase {
+                __field_0: EntityBase,
+            },
+            #variants
+        }
+    }.into()
+}
+
+
 
 #[proc_macro_derive(SPacketManual, attributes(state, id))]
 pub fn register_spacket_manual(input: TokenStream) -> TokenStream {
@@ -47,7 +357,7 @@ pub fn register_spacket_manual(input: TokenStream) -> TokenStream {
         id, 
         state, 
         _fields
-    ) = impl_packet(&ast);
+    ) = packet::impl_packet(&ast);
     match state {
         ConnectionState::Handshake => {
             let mut lock = HANDSHAKE_PACKETS.lock().unwrap();
@@ -82,287 +392,21 @@ pub fn register_spacket_manual(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(CPacket, attributes(state, id))]
 pub fn cpacket_derive(input: TokenStream) -> TokenStream {
     let ast = syn::parse(input).unwrap();
-    impl_cpacket(&ast)
+    packet::impl_cpacket(&ast).into()
 }
 
-fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
-    let (
-            name, 
-            id, 
-            state, 
-            fields
-        ) = impl_packet(ast);
-    /* 
-     * impl Self, impl Clientbound
-     */
-    let mut fields_text: String = String::new();
-    let mut assign: String = String::new();
-    let mut writes: String = String::new();
 
-    fn borrow(str: &str) -> &str {
-        match str {
-            "String" => "&",
-            "JSONString" => "&",
-            "TextComponent<Json>" => "&",
-            "TextComponent<Nbt>" => "&",
-            "NBT" => "&",
-            "PrefixedByteArray" => "&",
-            "InferredByteArray" => "&",
-            "PropertyArray" => "&",
-            "DeathLocation" => "&",
-            _ => "",
-        }
-    }
-
-    for field in &fields.named {
-        let field_name = field.ident.to_token_stream().to_string();
-
-        fields_text += field.to_token_stream().to_string().as_str();
-        fields_text += ", ";
-        
-        assign += format!("{field_name} : {field_name}, ").as_str();
-
-
-
-        let field_type = field.ty.to_token_stream().to_string();
-        if field_type.starts_with("Option") {
-            let option_type = extract_T_from_option(&field_type);
-            writes += format!("data.extend(create_option(self.{field_name}{}));", if borrow(option_type.as_str()) == "&" {".clone()"} else {""}).as_str();
-        } else {
-            //writes += format!("data.extend({func}({}self.{field_name}));", borrow(field_type.as_str())).as_str();
-            writes += format!("data.extend(self.{field_name}.to_protocol_bytes().iter());", /*borrow(field_type.as_str())*/).as_str();
-        }
-    }
-
-    let assign: proc_macro2::TokenStream = assign.parse().unwrap();
-    let fields_text: proc_macro2::TokenStream = fields_text.parse().unwrap();
-    let writes: proc_macro2::TokenStream = writes.parse().unwrap();
-
-    let gen = quote! {
-        impl Packet for #name {
-            fn get_id(&self) -> i32{
-                #id
-            }
-            fn get_associated_state(&self) -> ConnectionState {
-                #state
-            }
-        }
-
-        impl Clientbound for #name {
-            fn to_be_bytes(&self) -> Vec<u8> {
-                let mut data: Vec<u8> = Vec::new();
-                #writes
-                let mut out: Vec<u8> = VarInt::new(data.len() as i32 + 1).to_protocol_bytes();
-                out.push(#id as u8);
-                out.append(&mut data);
-                out
-            }
-        }
-
-        impl #name {
-            pub fn new(
-                #fields_text
-            ) -> Self {
-                #name {
-                    #assign
-                }
-            }
-        }
-    };
-    gen.into()
-}
 
 
 #[proc_macro_derive(SPacket, attributes(state, id))]
 pub fn spacket_derive(input: TokenStream) -> TokenStream {
     let ast = syn::parse(input).unwrap();
-    impl_spacket(&ast)
+    packet::impl_spacket(&ast).into()
 }
 
-fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
-    let (
-            name, 
-            id, 
-            state, 
-            fields
-        ) = impl_packet(ast);
 
-    match state {
-        ConnectionState::Handshake => {
-            let mut lock = HANDSHAKE_PACKETS.lock().unwrap();
-            lock.insert(id, name.to_string());
-            drop(lock);
-        },
-        ConnectionState::Status => {
-            let mut lock = STATUS_PACKETS.lock().unwrap();
-            lock.insert(id, name.to_string());
-            drop(lock);
-        },
-        ConnectionState::Login => {
-            let mut lock = LOGIN_PACKETS.lock().unwrap();
-            lock.insert(id, name.to_string());
-            drop(lock);
-        },
-        ConnectionState::Configuration => {
-            let mut lock = CONFIGURATION_PACKETS.lock().unwrap();
-            lock.insert(id, name.to_string());
-            drop(lock);
-        },
-        ConnectionState::Play => {
-            let mut lock = PLAY_PACKETS.lock().unwrap();
-            lock.insert(id, name.to_string());
-            drop(lock);
-        }
-    }
 
-    /* 
-     * impl Serverbound, Self
-     */
 
-    let mut field_names = String::new();
-    let mut let_reads = String::new();
-    let mut getters = String::new();
-
-    //borrow variable-sized types
-    fn borrow(str: &str) -> &str {
-        match str {
-            "String" => "&",
-            "JSONString" => "&",
-            "TextComponent<Json>" => "&",
-            "TextComponent<Nbt>" => "&",
-            "NBT" => "&",
-            "PrefixedByteArray" => "&",
-            "InferredByteArray" => "&",
-            "PropertyArray" => "&",
-            "DeathLocation" => "&",
-            "Vec<DataPackID>" => "&",
-            _ => "",
-        }
-    }
-
-    for field in &fields.named {
-        let field_name = field.ident.to_token_stream().to_string();
-        field_names += format!("{field_name} : {field_name}, ").as_str();
-
-        let field_type = field.ty.to_token_stream().to_string();
-
-        if field_type.starts_with("Option") {
-            let option_type = extract_T_from_option(&field_type);
-            
-            let b = borrow(option_type.as_str());
-            getters += format!("pub fn get_{field_name}(&self) -> Option<{b}{option_type}> {{ self.{field_name}{} }}", if b == "&" {".as_ref()"} else {""}).as_str();
-
-            let_reads += format!("let {field_name}: Option<{option_type}> = read_option(iter)?;").as_str();
-        } else if field_type.starts_with("Vec") {
-            let b = borrow(field_type.as_str());
-            getters += format!("pub fn get_{field_name}(&self) -> &{field_type} {{ &self.{field_name} }}").as_str();
-
-            let_reads += format!("let {field_name}: {field_type} = Vec::from_protocol_iter(iter)?;").as_str();
-        
-        } else {
-            let b = borrow(field_type.as_str());
-            getters += format!("pub fn get_{field_name}(&self) -> {b}{field_type} {{ {b}self.{field_name} }}").as_str();
-
-            let_reads += format!("let {field_name}: {field_type} = {field_type}::from_protocol_iter(iter)?;").as_str();
-        }
-    }
-
-    let field_names: proc_macro2::TokenStream = field_names.parse().unwrap();
-    let let_reads: proc_macro2::TokenStream = let_reads.parse().unwrap();
-    let getters: proc_macro2::TokenStream = getters.parse().unwrap();
-
-    let gen = quote! {
-        impl Packet for #name {
-            fn get_id(&self) -> i32{
-                #id
-            }
-            fn get_associated_state(&self) -> ConnectionState {
-                #state
-            }
-        }
-        impl Serverbound for #name {
-            fn parse(iter: &mut impl Iterator<Item = u8>) -> Result<Box<#name>, Box<dyn Error + Send + Sync>> {
-                #let_reads
-                Ok(Box::new(#name {
-                    #field_names
-                }))
-            }
-        }
-        impl #name {
-            #getters
-        }
-    };
-    gen.into()
-}
-
-fn impl_packet(ast: &syn::DeriveInput) -> (&syn::Ident, i32, ConnectionState, &syn::FieldsNamed) {
-    let name = &ast.ident;
-    let attributes = &ast.attrs;
-    if attributes.len() < 2 {
-        panic!("Missing required attributes for Derive(Packet): id, ConnectionState.");
-    }
-    let mut id: i32 = 0;
-    let mut state: ConnectionState = ConnectionState::Handshake;
-
-    for attr in attributes {
-        if attr.path().get_ident().to_token_stream().to_string().as_str() == "doc" {
-            continue;
-        }
-        let meta_list: &MetaList = attr.meta.require_list().unwrap_or_else(|_| panic!("Missing arguments for {:?}", attr.path().get_ident().to_token_stream().to_string()));
-
-        if attr.path().is_ident("id") {
-            let msg = "Argument to id must be a valid positive i32.";
-            let arg: syn::LitInt = meta_list.parse_args().expect(msg);
-            let arg_as_int = arg.base10_parse::<i32>().expect(msg);
-            if arg_as_int.is_negative() {
-                panic!("{msg}");
-            }
-            id = arg_as_int;
-        } else if attr.path().is_ident("state") {
-            let msg = "Argument to state must be a valid ConnectionState: (Handshake, Status, Login, Play, Configuration) }";
-            
-            let arg: proc_macro2::TokenStream = meta_list.parse_args().expect(msg);
-            match arg.to_string().as_str() {
-                "Handshake" => state = ConnectionState::Handshake,
-                "Status" => state = ConnectionState::Status,
-                "Login" => state = ConnectionState::Login,
-                "Configuration" => state = ConnectionState::Configuration,
-                "Play" => state = ConnectionState::Play,
-                _ => panic!("{msg}"),
-            }
-        }
-    }
-
-    let fields = match &ast.data {
-        Data::Struct(DataStruct{ fields: Fields::Named(it), struct_token : _, semi_token : _ }) => it,
-        Data::Struct(_) => panic!("Expected a `struct` with named fields."),
-        Data::Enum(_) | Data::Union(_) => panic!("#[Derive(CPacket)] is only implemented for `struct`s."),
-    };
-    
-    (name, id, state, fields)
-}
-
-#[allow(non_snake_case)]
-fn extract_T_from_option(string: &String) -> String {
-    let s = remove_whitespace(string);
-    s[7..s.len()-1].to_string()
-}
-
-fn remove_whitespace(string: &String) -> String {
-    let mut s = string.clone();
-    s.retain(|c| !c.is_whitespace());
-    s
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn extract_option() {
-        let string = "Option < Meme >".to_string();
-        assert_eq!(extract_T_from_option(&string), "Meme".to_string());
-    }
-}
 
 #[proc_macro]
 pub fn base64_image(input: TokenStream) -> TokenStream {
@@ -391,7 +435,6 @@ pub fn json_text_component(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-
 pub fn register_packets(_: TokenStream) -> TokenStream {
 
     let mut packets = String::new();

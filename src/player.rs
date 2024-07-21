@@ -17,7 +17,6 @@ use uuid::Uuid;
 use crate::connection::ConnectionError;
 use crate::data_types::text_component::Nbt;
 use crate::data_types::TextComponent;
-use crate::entity::entity_base::EntityBase;
 use crate::packet;
 use crate::packet::configuration::CDisconnect_Config;
 use crate::packet::play::CDisconnect_Play;
@@ -43,7 +42,6 @@ impl std::fmt::Display for PermissionError {
 pub struct Player {
     connected: Mutex<bool>,
     id: OnceLock<i32>,
-    eid: OnceLock<i32>,
     name: String,
     uuid: Uuid,
     connection: RwLock<Connection>,
@@ -57,7 +55,6 @@ impl<'a> Player {
         Player { 
             connected : Mutex::new(true),
             id : OnceLock::new(), //temp value is changed quickly
-            eid : OnceLock::new(),
             name : name, 
             uuid : uuid, 
             connection : RwLock::new(connection),
@@ -67,7 +64,9 @@ impl<'a> Player {
         }
     }
 
-    pub(in crate) fn get_connection(&self) -> &RwLock<Connection> {
+
+
+    pub fn get_connection(&self) -> &RwLock<Connection> {
         &self.connection
     }
 
@@ -165,65 +164,6 @@ impl<'a> Player {
     }
 }
 
-impl EntityBase for Player {
-    fn get_eid(&self) -> i32
-        where Self: Sized {
-        match self.eid.get() {
-            Some(some) => *some,
-            None => -1,
-        }
-    }
-
-    fn get_position(&self) -> crate::data_types::vec_3d::Vec3d
-        where Self: Sized {
-        todo!()
-    }
-
-    fn is_on_fire(&self) -> bool
-        where Self: Sized {
-        false
-    }
-
-    fn get_look(&self) -> crate::data_types::Rotation
-        where Self: Sized {
-        todo!()
-    }
-
-    fn get_world(&self) -> Option<Weak<crate::world::World>>
-        where Self: Sized {
-        todo!()
-    }
-    
-    fn is_crouching(&self) -> bool
-        where Self: Sized {
-        false
-    }
-    
-    fn is_sprinting(&self) -> bool
-        where Self: Sized {
-        false
-    }
-    
-    fn is_swimming(&self) -> bool
-        where Self: Sized {
-        false
-    }
-    
-    fn is_invisible(&self) -> bool
-        where Self: Sized {
-        false
-    }
-    
-    fn is_glowing(&self) -> bool
-        where Self: Sized {
-        false
-    }
-    
-    fn is_using_elytra(&self) -> bool
-        where Self: Sized {
-        false
-    }
-}
 
 
 //TODO (maybe): Move all of this stuff inside server.rs

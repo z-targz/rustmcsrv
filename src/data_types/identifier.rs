@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use serde::ser::{Serialize, Serializer};
+use serde::ser::Serialize;
 
 use serde::de::{Deserialize, Deserializer, Visitor};
 
@@ -103,5 +103,13 @@ impl Identifier {
 
     pub fn to_string(&self) -> String {
         format!("{self}")
+    }
+
+    pub fn get_namespace(&self) -> String {
+        self.namespace.clone()
+    }
+
+    pub fn get_id(&self) -> String {
+        self.thing.clone()
     }
 }

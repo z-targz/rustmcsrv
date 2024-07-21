@@ -1,28 +1,103 @@
-use std::{cmp::{max, min}, collections::HashMap, fs::File, ops::Deref, path::PathBuf, sync::Weak};
+use std::{cmp::{max, min}, collections::HashMap, fs::File, io::Read, ops::Deref, path::{Path, PathBuf}, sync::Weak};
 
-use super::chunk::Chunk;
+use crate::world::chunk::Chunk;
+use itertools::Itertools;
+use lru::LruCache;
 use rayon::iter::*;
 
 pub struct Region {
     x: i32,
     z: i32,
+    loaded_chunks: HashMap<(i32, i32), Chunk>,
+    level_name: String,
+    region_file_data: Vec<u8>,
 }
 
 impl Region {
-    pub fn new(x: i32, z: i32) -> Self {
+    pub fn new(x: i32, z: i32, level_name: String) -> Self {
         Self {
             x : x,
             z : z,
+            loaded_chunks : HashMap::new(),
+            level_name: level_name.clone(),
+            region_file_data: File::open(Path::new(format!("{level_name}/region/").as_str())).unwrap().bytes().try_collect().unwrap()
         }
     }
 
-    pub(in super) fn load_chunks(&self, locations: Vec<(i32, i32)>) -> Result<Vec<((i32, i32), Chunk)>, std::io::Error> {
-        Ok(vec![])
+    pub fn load_chunk(&mut self, chunk_x: i32, chunk_z: i32, cache: &mut Option<LruCache<(i32, i32), Chunk>>) -> Result<&mut Chunk, std::io::Error> {
+        match cache {
+            //Use Cache
+            Some(chunk_cache) => match chunk_cache.pop(&(chunk_x, chunk_z)) {
+                Some(cached_chunk) => {
+                    self.loaded_chunks.insert((chunk_x, chunk_z), cached_chunk);
+                    Ok(self.loaded_chunks.get_mut(&(chunk_x, chunk_z)).unwrap())
+                },
+                None => {
+                    todo!()
+                },
+            },
+            //Load directly from disk
+            None => {
+                todo!()
+            },
+        }
     }
 
-    pub(in super) fn save_chunks(&self, chunks: Vec<((i32, i32), Chunk)>) -> Result<(), std::io::Error> {
-        
+    pub fn load_chunks(&mut self, locations: Vec<(i32, i32)>, cache: &mut Option<LruCache<(i32, i32), Chunk>>) -> Result<Vec<(i32, i32)>, std::io::Error> {
+        let mut locs = Vec::new();
+        for (loc_x, loc_z) in locations {
+            match self.load_chunk(loc_x, loc_z, cache
+            ) {
+                Ok(_) => locs.push((loc_x, loc_z)),
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(locs)
+    }
+
+    pub fn unload_chunks(&mut self, locations: Vec<(i32, i32)>, cache: Option<&mut LruCache<(i32, i32), Chunk>>) {
+        for (loc_x, loc_z) in locations {
+            
+        }
+    }
+
+    pub fn save_chunks(&mut self, locations: Vec<(i32, i32)>) -> Result<(), std::io::Error> {
+        for (loc_x, loc_z) in locations {
+            
+        }
         Ok(())
+    }
+
+    pub fn save_all_chunks(&mut self) -> Result<(), std::io::Error> {
+        self.save_chunks(self.loaded_chunks.keys().map(|&(loc_x, loc_z)| {
+            (loc_x, loc_z)
+        }).collect())?;
+        Ok(())
+    }
+
+    pub fn has_no_loaded_chunks(&self) -> bool {
+        self.loaded_chunks.is_empty()
+    }
+
+    pub fn get_loaded_chunks(&self) -> &HashMap<(i32, i32), Chunk> {
+        &self.loaded_chunks
+    }
+
+    pub fn get_loaded_chunks_mut(&mut self) -> &mut HashMap<(i32, i32), Chunk> {
+        &mut self.loaded_chunks
+    }
+
+    pub fn set_block(&mut self, x: usize, y: usize, z: usize, block_state: u16) {
+        let (chunk_x, chunk_z) = (x / 32, z / 32);
+        let (x_offset, z_offset) = (x.rem_euclid(32), z.rem_euclid(32));
+        match self.loaded_chunks.get_mut(&(chunk_x as i32, chunk_z as i32)) {
+            Some(chunk) => todo!(),
+            None => todo!(),
+        }
+    }
+
+    pub fn set_blocks(&mut self, operations: HashMap<(usize, usize, usize), u16>) {
+
     }
 }
 
@@ -30,7 +105,7 @@ impl Region {
 pub struct LoadRegion {
     x: i32,
     z: i32,
-    pub load_levels: [[u8; 32];32],
+    //pub load_levels: [[u8; 32];32],
 }
 
 impl LoadRegion {
@@ -38,7 +113,7 @@ impl LoadRegion {
         Self {
             x : location.0,
             z : location.1,
-            load_levels : [[34u8; 32];32],
+            //load_levels : [[34u8; 32];32],
         }
     }
     pub fn get_loc(&self) -> (i32, i32) {
@@ -56,7 +131,7 @@ impl LoadRegion {
     }
 }
 
-pub fn flatten_load_regions_at_location(location: (i32, i32), load_regions: impl Iterator<Item = LoadRegion> + Send + Sync) -> LoadRegion {
+/*pub fn flatten_load_regions_at_location(location: (i32, i32), load_regions: impl Iterator<Item = LoadRegion> + Send + Sync) -> LoadRegion {
     load_regions.fold(LoadRegion::new(location), |mut cur, nxt| {
         cur.load_levels.par_iter_mut().zip(nxt.load_levels.par_iter()).for_each(|(cur_z, nxt_z)| {
             cur_z.iter_mut().zip(nxt_z.iter()).for_each(|(cur_xz, nxt_xz)| {
@@ -65,7 +140,7 @@ pub fn flatten_load_regions_at_location(location: (i32, i32), load_regions: impl
         });
         cur
     })
-}
+}*/
 
 #[derive(Copy, Clone, Hash, Debug, PartialEq, Eq)]
 pub enum TicketType {
@@ -194,7 +269,7 @@ pub fn compute_load_region(region: &TicketRegion, neighbors: Vec<&TicketRegion>)
     LoadRegion {
         x : region.x,
         z : region.z,
-        load_levels : levels,
+        //load_levels : levels,
     }
 }
 

@@ -1,5 +1,6 @@
-use std::sync::Mutex;
+use std::{io::Write, sync::Mutex};
 
+use chrono::Local;
 use log::{info, Level, SetLoggerError};
 
 
@@ -100,10 +101,19 @@ impl log::Log for ConsoleLogger {
     #[inline]
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
-            crate::CONSOLE.println(format!("{}: {}", record.level().to_string().to_uppercase(), record.args().to_string()));
+            let dt = Local::now();
+            
+            crate::CONSOLE.println(
+                format!("[{}] {}: {}", 
+                dt.format("%H:%M:%S"), 
+                record.level().to_string().to_uppercase(), 
+                record.args().to_string())
+            );
         }
     }
 
-    fn flush(&self) {}
+    fn flush(&self) {
+        let _ = std::io::stdout().flush();
+    }
 }
 

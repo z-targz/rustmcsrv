@@ -16,6 +16,7 @@ pub mod inferred_byte_array;
 pub mod nbt;
 pub mod position;
 pub mod property_array;
+pub mod rotation;
 pub mod statistic_array;
 pub mod tag;
 pub mod text_component;
@@ -53,8 +54,7 @@ pub use {
     data_types::*,
 };
 
-#[derive(Debug, Copy, Clone)]
-pub struct Rotation(pub Angle, pub Angle);
+
 
 
 //Leaving this here so we don't break macros

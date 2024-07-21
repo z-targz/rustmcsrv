@@ -48,8 +48,8 @@ pub(in crate::state) async fn play_state(player_ref: Arc<Player>) {
 
     debug!("sending login play packet");
     match player_ref.send_packet(CLogin_Play::new(
-        1, 
-        false, 
+        THE_SERVER.get_next_eid().await, 
+        false,
         VarInt::new(3), 
         vec![
             Identifier::new("minecraft:overworld").unwrap(), 
@@ -68,7 +68,7 @@ pub(in crate::state) async fn play_state(player_ref: Arc<Player>) {
         1,
         1,
         false,
-        false,
+        true,
         None,
         VarInt::new(0),
         false

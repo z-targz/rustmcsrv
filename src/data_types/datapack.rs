@@ -65,7 +65,7 @@ impl FromProtocol for Vec<DataPackID> {
     {
         let mut out = Vec::new();
         let len = VarInt::from_protocol_iter(iter)?;
-        for i in 0..len.get() {
+        for _ in 0..len.get() {
             out.push(DataPackID::from_protocol_iter(iter)?);
         }
         Ok(out)

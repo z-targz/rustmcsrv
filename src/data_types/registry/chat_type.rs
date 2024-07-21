@@ -3,7 +3,7 @@ use serde::{Serialize, Deserialize};
 use crate::data_types::{text_component::Json, TextComponent};
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Decoration {
     translation_key: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -14,7 +14,7 @@ pub struct Decoration {
 //TODO: probably replace this with a unified text component struct
 // but this isn't even used by default for the vanilla registry for 1.20.4
 // but may be in the future
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Style {
     #[serde(skip_serializing_if = "Option::is_none")]
     color: Option<String>,

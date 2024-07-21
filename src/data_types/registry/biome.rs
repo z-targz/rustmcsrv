@@ -1,7 +1,7 @@
 use serde::{Serialize, Deserialize};
 use super::registry;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Effects {
     fog_color: i32,
     water_color: i32,
@@ -27,14 +27,14 @@ pub struct Effects {
     music: Option<Music>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Particle {
     #[serde(skip_serializing_if = "Option::is_none")]
     options: Option<ParticleOptions>,
     probability: f32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ParticleOptions {
     r#type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -42,8 +42,9 @@ pub struct ParticleOptions {
 }
 
 //TODO: move this somewhere appropriate
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
+#[allow(non_camel_case_types)]
 pub enum ParticleData {
     ambient_entity_effect,
     angry_villager,
@@ -52,14 +53,14 @@ pub enum ParticleData {
     //TODO: fill this out https://wiki.vg/Particles
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AmbientSound {
     sound_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     range: Option<f32>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MoodSound {
     sound: String,
     tick_delay: i32,
@@ -67,13 +68,13 @@ pub struct MoodSound {
     offset: f64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AdditionsSound {
     sound: String,
     tick_chance: f64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Music {
     sound: String,
     min_delay: i32,
@@ -83,7 +84,7 @@ pub struct Music {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Spawn {
     r#type: String,
     #[serde(rename = "maxCount")]
@@ -93,7 +94,7 @@ pub struct Spawn {
     weight: i32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum Carvers {
     VecOfStrings(Vec<String>),

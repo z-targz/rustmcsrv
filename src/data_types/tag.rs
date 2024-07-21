@@ -1,4 +1,4 @@
-use super::{registry::dimension_type::IntegerDistribution, tags::tags::parse_directory, Identifier, ToProtocol, VarInt};
+use super::{tags::tags::parse_directory, Identifier, ToProtocol, VarInt};
 
 #[derive(Clone)]
 pub struct TagRegistry {

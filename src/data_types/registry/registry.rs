@@ -1,13 +1,16 @@
 use std::marker::PhantomData;
-use std::{fs::File, path::Path};
+
 
 use std::collections::HashMap;
 
-use quartz_nbt::io::NbtIoError;
+use enum_as_inner::EnumAsInner;
+
 use quartz_nbt::io::Flavor;
 use quartz_nbt::serde::serialize;
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer};
+use server_macros::pack_registry_json_files;
+use maplit::hashmap;
 use super::biome;
 use super::chat_type;
 use super::dimension_type;
@@ -16,7 +19,7 @@ use super::wolf_variant;
 use crate::data_types::text_component::Json;
 use crate::data_types::TextComponent;
 use crate::data_types::NBT;
-use itertools::Itertools;
+
 
 
 use serde::Serialize;
@@ -34,19 +37,32 @@ pub struct Registry {
     value: Vec<RegistryEntry>,
 }
 
-#[derive(serde::Serialize, Deserialize, Debug)]
+#[derive(serde::Serialize, Deserialize, Debug, Clone)]
 pub struct RegistryEntry {
     name: String,
     id: i32,
     element: Element,
 }
 
+impl RegistryEntry {
+    pub fn get_element(&self) -> &Element {
+        &self.element
+    }
+}
+
 pub struct NBTifiedRegistryEntry {
     pub entry_identifier: String,
+    id: i32,
     pub data: NBT,
 }
 
-#[derive(serde::Serialize, Deserialize, Debug)]
+impl NBTifiedRegistryEntry {
+    pub fn get_id(&self) -> i32 {
+        self.id
+    }
+}
+
+#[derive(serde::Serialize, Deserialize, Debug, Clone)]
 pub struct Empty {}
 
 
@@ -85,7 +101,7 @@ where
     deserializer.deserialize_any(ByteOrBool(PhantomData))
 }
 
-#[derive(serde::Serialize, Deserialize, Debug)]
+#[derive(serde::Serialize, Deserialize, Debug, Clone, EnumAsInner)]
 #[serde(untagged)]
 pub enum Element {
     TrimPattern {
@@ -147,33 +163,8 @@ pub enum Element {
     },
 
     DimensionType {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        fixed_time: Option<i64>,
-        #[serde(deserialize_with = "byte_from_bool")]
-        has_skylight: i8,//
-        #[serde(deserialize_with = "byte_from_bool")]
-        has_ceiling: i8,//
-        #[serde(deserialize_with = "byte_from_bool")]
-        ultrawarm: i8,//
-        #[serde(deserialize_with = "byte_from_bool")]
-        natural: i8,//
-        coordinate_scale: f64,//
-        #[serde(deserialize_with = "byte_from_bool")]
-        bed_works: i8,//
-        #[serde(deserialize_with = "byte_from_bool")]
-        respawn_anchor_works: i8,//
-        min_y: i32,//
-        height: i32,//
-        logical_height: i32,//
-        infiniburn: String,//
-        effects: String,//
-        ambient_light: f32,//
-        #[serde(deserialize_with = "byte_from_bool")]
-        piglin_safe: i8,//
-        #[serde(deserialize_with = "byte_from_bool")]
-        has_raids: i8,//
-        monster_spawn_light_level: dimension_type::LightLevel,//
-        monster_spawn_block_light_limit: i32,//
+        #[serde(flatten)]
+        data: DimensionProperties,
     },
 
     BannerPattern {
@@ -186,38 +177,158 @@ pub enum Element {
         tame_texture: String,
         angry_texture: String,
         biomes: wolf_variant::Biomes,
+    },
+
+    PaintingVariant {
+        asset_id: String,
+        width: i32,
+        height: i32,
+    },
+}
+
+impl Element {
+    pub fn get_dimension_properties(&self) -> Result<&DimensionProperties,()> {
+        match self {
+            Element::DimensionType { data } => Ok(data),
+            _ => Err(())
+        }
     }
 }
 
-
-
-pub fn get_registry() -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    let file = File::open(Path::new("src/data_types/registry/registry.json"))?;
-    let u = serde_json::from_reader(file)?;
-    Ok(u)
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DimensionProperties {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fixed_time: Option<i64>,
+    #[serde(deserialize_with = "byte_from_bool")]
+    has_skylight: i8,//
+    #[serde(deserialize_with = "byte_from_bool")]
+    has_ceiling: i8,//
+    #[serde(deserialize_with = "byte_from_bool")]
+    ultrawarm: i8,//
+    #[serde(deserialize_with = "byte_from_bool")]
+    natural: i8,//
+    coordinate_scale: f64,//
+    #[serde(deserialize_with = "byte_from_bool")]
+    bed_works: i8,//
+    #[serde(deserialize_with = "byte_from_bool")]
+    respawn_anchor_works: i8,//
+    min_y: i32,//
+    height: i32,//
+    logical_height: i32,//
+    infiniburn: String,//
+    effects: String,//
+    ambient_light: f32,//
+    #[serde(deserialize_with = "byte_from_bool")]
+    piglin_safe: i8,//
+    #[serde(deserialize_with = "byte_from_bool")]
+    has_raids: i8,//
+    monster_spawn_light_level: dimension_type::LightLevel,//
+    monster_spawn_block_light_limit: i32,//
 }
 
-pub fn get_registry_nbt(registry_name: &str) -> Result<Vec<NBTifiedRegistryEntry>, NbtIoError> {
-    let mut i = 0;
-    let mut registry_entries: Vec<RegistryEntry> = Vec::new();
+impl DimensionProperties {
+    pub fn has_skylight(&self) -> bool {
+        self.has_skylight != 0
+    }
 
-    std::fs::read_dir(format!("generated/data/minecraft/{}", registry_name)).unwrap()
-    .map(|f| f.unwrap().path())
-    .filter(|f| f.is_file())
-    .sorted_by(|p, p2| {
-        p.cmp(p2)
-    })
-    .map(|p| (p.clone(), File::open(p).unwrap()))
-    .for_each(|(p, f)| {
-        registry_entries.push(RegistryEntry {
-            name: format!("minecraft:{}", p.file_stem().unwrap().to_str().unwrap()),
-            id: i,
-            element: serde_json::from_reader(f).unwrap(),
-        });
-        i += 1;
-    });
+    pub fn has_ceiling(&self) -> bool {
+        self.has_ceiling != 0
+    }
+
+    pub fn is_ultrawarm(&self) -> bool {
+        self.ultrawarm != 0
+    }
+
+    pub fn is_natural(&self) -> bool {
+        self.natural != 0
+    }
+
+    pub fn bed_works(&self) -> bool {
+        self.natural != 0
+    }
+
+    pub fn respawn_anchor_works(&self) -> bool {
+        self.respawn_anchor_works != 0
+    }
+
+    pub fn is_piglin_safe(&self) -> bool {
+        self.piglin_safe != 0
+    }
+
+    pub fn has_raids(&self) -> bool {
+        self.has_raids != 0
+    }
+
+    pub fn get_fixed_time(&self) -> Option<i64> {
+        self.fixed_time
+    }
+
+    pub fn get_coordinate_scale(&self) -> f64 {
+        self.coordinate_scale
+    }
+
+    pub fn get_min_y(&self) -> i32 {
+        self.min_y
+    }
+
+    pub fn get_height(&self) -> i32 {
+        self.height
+    }
+
+    pub fn get_logical_height(&self) -> i32 {
+        self.logical_height
+    }
+
+    pub fn get_infiniburn(&self) -> &String {
+        &self.infiniburn
+    }
+
+    pub fn get_effects(&self) -> &String {
+        &self.effects
+    }
+
+    pub fn get_ambient_light(&self) -> f32 {
+        self.ambient_light
+    }
+
+    pub fn get_monster_spawn_light_level(&self) -> &dimension_type::LightLevel {
+        &self.monster_spawn_light_level
+    }
+
+    pub fn get_monster_spawn_block_light_limit(&self) -> i32 {
+        self.monster_spawn_block_light_limit
+    }
+
+}
 
 
+pub fn get_registry() -> 
+    Result<HashMap<String, HashMap<String, RegistryEntry>>, serde_json::error::Error> {
+
+    let map: HashMap<String, HashMap<String, String>> = pack_registry_json_files!();
+    map.into_iter()
+        .map(|(registry_name, registry_data)| {
+            let mut i = 0;
+            Ok((
+                registry_name,
+                registry_data.into_iter()
+                    .map(|(reg_key, json_text)| {
+                        let reg_entry = 
+                            RegistryEntry {
+                                name: reg_key.clone(),
+                                id: i,
+                                element: serde_json::from_str(json_text.as_str())?
+                            };
+                        i += 1;
+                        Ok((reg_key, reg_entry))
+                    })
+                    .collect::<Result<HashMap<String, RegistryEntry>, serde_json::error::Error>>()?
+            ))
+        })
+        .collect::<Result<HashMap<String, HashMap<String, RegistryEntry>>, serde_json::error::Error>>()
+}
+
+pub fn get_registry_nbt(mut registry_entries: Vec<RegistryEntry>) -> Result<Vec<NBTifiedRegistryEntry>, Box<dyn std::error::Error>> {
     let mut nbtified_entries = Vec::new();
     registry_entries.sort_by(|e1, e2| e1.name.cmp(&e2.name));
     for entry in registry_entries {
@@ -227,12 +338,12 @@ pub fn get_registry_nbt(registry_name: &str) -> Result<Vec<NBTifiedRegistryEntry
                 x[0] = 10u8;
                 nbtified_entries.push(NBTifiedRegistryEntry {
                     entry_identifier: entry.name,
+                    id: entry.id,
                     data: x,
                 });
-                
             },
             Err(e) => { 
-                return Err(e); 
+                return Err(Box::new(e)); 
             },
         }
     }
@@ -245,13 +356,10 @@ pub fn get_registry_nbt(registry_name: &str) -> Result<Vec<NBTifiedRegistryEntry
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, io::Read};
+    use std::fs::{self, File};
 
-    use serde::ser::Serialize;
+    use itertools::Itertools;
 
-
-    use serde_json::from_reader;
-    use test::Bencher;
 
     use super::*;
     #[test]
@@ -320,8 +428,8 @@ mod tests {
             }
         }*/
     }
-    #[test]
-    fn construct_nbt() {
+    //#[test]
+    //fn construct_nbt() {
         //let registry_data: RegistryData = RegistryData{
         //    data: serde_json::de::from_str(get_registry_nbt("trim_pattern").unwrap().data.to_string().as_str()).unwrap(),
         //};
@@ -337,18 +445,18 @@ mod tests {
 
         //println!("{:?}", serialized);
         //println!("{:?}", serialized);
-        println!();
-    }
+        //println!();
+    //}
 
-    use quartz_nbt::{snbt, NbtTag};
+    //use quartz_nbt::{snbt, NbtTag};
 
-    #[test]
-    fn snbt() {
+    //#[test]
+    /*fn snbt() {
  
         let tag: NbtTag = serde_json::de::from_str(get_registry().unwrap().to_string().as_str()).unwrap();
         println!("nbt: {}", tag.to_snbt());
         println!();
-    }
+    }*/
     //Significantly slower
     /*
     #[bench]
@@ -367,7 +475,7 @@ mod tests {
     }*/
     
     //Significantly faster
-    #[bench]
+    /*#[bench]
     fn bench_construct_nbt_quartz(bencher: &mut Bencher) {
         match serde_json::de::from_str::<HashMap<String, Registry>>(get_registry().unwrap().to_string().as_str()) {
             Ok(deserialized) => {
@@ -379,5 +487,5 @@ mod tests {
             },
             Err(_) => panic!("JSON was invalid!"),
         };
-    }
+    }*/
 }

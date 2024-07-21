@@ -1,30 +1,34 @@
-use std::borrow::Borrow;
-use std::collections::{HashMap, HashSet};
-use std::error::Error;
+
+use std::collections::HashMap;
+
+
 use std::num::NonZeroUsize;
 use std::sync::Arc;
-use std::sync::{Mutex, Weak};
+use std::sync::Weak;
 use std::hash::Hash;
 
 
 use dashmap::DashMap;
-use rayon::prelude::*;
 
-use itertools::Itertools;
+
+
 use lru::LruCache;
+use std::sync::Mutex;
 
-use crate::entity::entity_base::EntityBase;
+//use crate::entity::entity_base::EntityBase;
 
-use super::region::LoadRegion;
-use super::{Ticket2, World};
+use crate::entity::entity::Entity;
 
-#[derive(Clone)]
-pub enum LoadType {
-    EntityTicking,
-    BlockTicking,
-    Border,
-    Unloaded,
-}
+
+
+
+// #[derive(Clone)]
+// pub enum LoadType {
+//     EntityTicking,
+//     BlockTicking,
+//     Border,
+//     Unloaded,
+// }
 
 
 /// Make sure to remove the invalid weak pointers when ticking the chunk!
@@ -32,22 +36,22 @@ pub struct Chunk {
     x: i32,
     z: i32,
     sections: Vec<Option<ChunkSection>>,
-    entities: DashMap<i32, Weak<dyn EntityBase + Send + Sync>>,
-    pub entity_tickets: Vec<Weak<Ticket2>>,
-    pub block_tickets: Vec<Weak<Ticket2>>,
-    pub border_tickets: Vec<Weak<Ticket2>>,
+    entities: DashMap<i32, Weak<Mutex<Entity>>>,
+    //pub entity_tickets: Vec<Weak<Ticket2>>,
+    //pub block_tickets: Vec<Weak<Ticket2>>,
+    //pub border_tickets: Vec<Weak<Ticket2>>,
 }
 
 impl Clone for Chunk {
     fn clone(&self) -> Self {
         Self { 
-            x: self.x.clone(), 
-            z: self.z.clone(), 
+            x: self.x,
+            z: self.z,
             sections: self.sections.clone(), 
             entities: self.entities.clone(), 
-            entity_tickets: Vec::new(), 
-            block_tickets: Vec::new(), 
-            border_tickets: Vec::new(), 
+            //entity_tickets: Vec::new(), 
+            //block_tickets: Vec::new(), 
+            //border_tickets: Vec::new(), 
         }
     }
 }
@@ -61,15 +65,15 @@ impl Hash for Chunk {
 
 impl Chunk {
     #[inline]
-    pub fn new(x: i32, z: i32, num_sections: u8, load_type: LoadType) -> Self {
+    pub fn new(x: i32, z: i32, height: i32) -> Self {
         Self {
             x : x,
             z : z,
-            sections : std::iter::repeat(None).take(num_sections as usize).collect(),
+            sections : std::iter::repeat(None).take((height/16) as usize).collect(),
             entities : DashMap::new(),
-            entity_tickets : Vec::new().into(),
-            block_tickets: Vec::new().into(),
-            border_tickets : Vec::new().into(),
+            //entity_tickets : Vec::new().into(),
+            //block_tickets: Vec::new().into(),
+            //border_tickets : Vec::new().into(),
         }
     }
 
@@ -92,21 +96,81 @@ impl Chunk {
     pub fn get_z(&self) -> i32 {
         self.z
     }
+
+    pub fn tick_entities(&mut self) {
+        for entry in self.entities.iter() {
+            match entry.value().upgrade() {
+                Some(entity) => {
+                    //entity.lock().unwrap().tick()
+                },
+                None => {
+                    self.entities.remove(entry.key());
+                }
+            }
+        };
+    }
+
+    pub fn tick_blocks(&mut self) {
+        todo!();
+    }
+
+    pub fn set_block(&mut self, x: usize, y: usize, z: usize, block_state: u16) {
+
+        let chunk_section_idx = y / 16;
+        let chunk_section_offset_y = y % 16;
+        
+        //NOTE: Make sure to do the bounds checking and y adjustment in the world's set block method
+        unsafe {
+            match self.sections.get_unchecked_mut(chunk_section_idx) {
+                Some(section) => section.set_block(x, chunk_section_offset_y, z, block_state),
+                None => ChunkSection { data: Default::default() }.set_block(x, chunk_section_offset_y, z, block_state),
+            }
+        }
+    }
+
+    pub fn set_blocks(&mut self, operations: HashMap<(usize, usize, usize), u16>) {
+        for ((x, y, z), block_state) in operations {
+            let chunk_section_idx = y / 16;
+            let chunk_section_offset_y = y % 16;
+
+            //NOTE: Make sure to do the bounds checking and y adjustment in the world's set block method
+            unsafe {
+                match self.sections.get_unchecked_mut(chunk_section_idx) {
+                    Some(section) => section.set_block(x, chunk_section_offset_y, z, block_state),
+                    None => ChunkSection { data: Default::default() }.set_block(x, chunk_section_offset_y, z, block_state),
+                }
+            }
+        }
+    }
+
 }
 
 #[derive(Clone)]
 pub struct ChunkSection {
-    modified: bool,
     data: [[[u16; 16]; 16]; 16],
 }
 
 impl ChunkSection {
+    pub fn new(data: [[[u16; 16]; 16]; 16]) -> Self {
+        ChunkSection {
+            data: data
+        }
+    }
 
+    pub fn set_block(&mut self, x: usize, y: usize, z: usize, block_state: u16) {
+        self.data[x][y][z] = block_state;
+    }
+
+    pub fn set_blocks(&mut self, operations: HashMap<(usize, usize, usize), u16>) {
+        for ((x, y, z), block_state) in operations {
+            self.data[x][y][z] = block_state;
+        }
+    }
 }
 
 pub struct ChunkCache {
     max_capacity: NonZeroUsize,
-    cache: LruCache<(i32, i32), Arc<Mutex<Chunk>>>
+    cache: LruCache<(i32, i32), Arc<std::sync::Mutex<Chunk>>>
 }
 
 impl ChunkCache {
@@ -121,13 +185,11 @@ impl ChunkCache {
         self.cache.push((chunk.x, chunk.z), Arc::new(Mutex::new(chunk)))
     }
 
-    pub fn save(&self) -> Vec<((i32, i32), Chunk)> {
-        //using a parallel iterator here because the cache can be massive and theoretically, locking and unlocking mutexes one at a time will incur a lot of overhead.
-        //TODO: needs testing.
+    pub async fn save(&self) -> Vec<((i32, i32), Chunk)> {
         self.cache.iter()
-            .par_bridge() 
-            .map(|(a, b)| (*a, b.lock().unwrap().clone()))
-            .collect()
+            .map(|(a, b)| 
+                (a.clone(), b.clone().lock().unwrap().clone())
+            ).collect()
     }
 
     pub fn evacuate_unchecked(self) -> Vec<((i32, i32), Chunk)> {

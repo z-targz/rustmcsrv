@@ -1,7 +1,5 @@
 use std::{collections::HashMap, fs::File, path::{Path, PathBuf}};
 
-use chashmap::CHashMap;
-use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 
 
@@ -13,9 +11,8 @@ pub struct RegistriesJSON {
 impl RegistriesJSON {
     pub fn new() -> Self {
         RegistriesJSON {
-            registries: serde_json::de::from_reader(File::open(Path::new("generated/reports/registries.json")).unwrap()).unwrap()
+            registries: serde_json::de::from_str(crate::REGISTRIES_JSON.as_str()).unwrap()
         }
-        
     }
 }
 
@@ -36,6 +33,10 @@ pub struct Entry {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Mapping {
     mappings: HashMap<String, i32>,
+}
+
+impl Mapping {
+    
 }
 
 impl Mapping {
@@ -72,7 +73,7 @@ impl TagJSON {
 pub fn parse_directory(path: &str) -> HashMap<String, Vec<i32>> {
     let mappings = read_registry_json();
     let the_path = Path::new(path).to_path_buf();
-    let mut tags: HashMap<_,_> = std::fs::read_dir(path).unwrap()
+    let tags: HashMap<_,_> = std::fs::read_dir(path).unwrap()
         .into_iter()
         .map(|result| result.unwrap().path())
         .map(|p| {
@@ -137,12 +138,10 @@ pub fn resolve_tag(tag: String, map: &HashMap<String, TagJSON>) -> Vec<String>{
     }
 }
 
+#[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, path::{Path, PathBuf}};
+    use crate::data_types::tags::tags::{parse_directory, read_registry_json};
 
-    use crate::data_types::tags::tags::{read_registry_json, RegistriesJSON, TagJSON};
-
-    use super::{parse_directory, Mapping};
 
 
     #[test]

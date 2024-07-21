@@ -1,17 +1,18 @@
 #![feature(coroutines)]
 #![feature(iter_advance_by)]
-#![feature(non_null_convenience)]
 #![feature(test)]
 #![feature(hash_extract_if)]
 #![recursion_limit = "256"]
 #![feature(allocator_api)]
+#![feature(async_closure, async_fn_traits)]
+
 
 #[macro_use]
 extern crate serde_json;
 extern crate test;
 extern crate lru;
 extern crate itertools;
-
+extern crate convert_case;
 
 
 
@@ -19,14 +20,15 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use data_types::registry::NBTifiedRegistryEntry;
+use data_types::registry::{registry, NBTifiedRegistryEntry, RegistryEntry};
 use data_types::tag::TagRegistry;
 use data_types::NBT;
+use server_macros::pack_registry_json_files;
 use tokio::runtime::Runtime;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
-use lazy_static::lazy_static;
+
 
 use log::{debug, error, info};
 
@@ -38,6 +40,7 @@ use crate::connection::Connection;
 use crate::packet::SPacket;
 use crate::state::handshake_state::handshake_state;
 use crate::world::World;
+use std::sync::LazyLock;
 
 mod player;
 mod player_data;
@@ -60,7 +63,7 @@ mod entity;
 
 
 const TIMEOUT: Duration = Duration::from_secs(10);
-const REGISTRIES: [&str;8] = [
+pub const REGISTRIES: [&str;9] = [
     "worldgen/biome",
     "chat_type",
     "trim_pattern", 
@@ -69,6 +72,7 @@ const REGISTRIES: [&str;8] = [
     "dimension_type",
     "damage_type",
     "banner_pattern",
+    "painting_variant",
 ];
 
 const TAGS: [&str;5] = [
@@ -80,23 +84,45 @@ const TAGS: [&str;5] = [
 ];
 
 
-lazy_static!{
-    pub static ref MOTD: String = "A Minecraft Server (§cMade with Rust!§r)".to_string();
-    pub static ref THE_SERVER: Server = Server::new(ServerProperties::load_server_properties().unwrap_or_else(|e| {
-        eprintln!("{e}");
-        std::process::exit(1);
-    }));
-    pub static ref RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread().enable_time().enable_io().build().unwrap();
-    
-    pub static ref REGISTRY_NBT: HashMap<String, Vec<NBTifiedRegistryEntry>> = 
-        REGISTRIES.iter().map(|registry_name| {
-            (registry_name.to_string(), data_types::registry::get_registry_nbt(registry_name).unwrap())
-        }).collect();
-        
-    pub static ref REGISTRY_TAGS: Vec<TagRegistry> = TAGS.iter().map(|tags| TagRegistry::new(tags)).collect();
+pub static REGISTRIES_JSON: LazyLock<String> = LazyLock::new(|| {
+    include_str!("../generated/reports/registries.json").to_owned()
+});
 
-    pub static ref CONSOLE: Console = Console::new().unwrap();
-}
+pub static SERVER_REGISTRY: LazyLock<HashMap<String, HashMap<String, RegistryEntry>>> = LazyLock::new(|| {
+    registry::get_registry().unwrap()
+});
+
+pub static REGISTRY_NBT: LazyLock<HashMap<String, Vec<NBTifiedRegistryEntry>>> = LazyLock::new(|| {
+    REGISTRIES.iter().map(|registry_name| {
+        (
+            registry_name.to_string(), 
+            data_types::registry::get_registry_nbt(
+                SERVER_REGISTRY.get(*registry_name).unwrap()
+                    .iter()
+                    .map(|(_, v)| v.clone())
+                    .collect()).unwrap())
+    }).collect()
+});
+
+pub static REGISTRY_TAGS: LazyLock<Vec<TagRegistry>> = LazyLock::new(|| {
+    TAGS.iter().map(|tags| TagRegistry::new(tags)).collect()
+});
+
+pub static THE_SERVER: LazyLock<Server> = LazyLock::new(|| {
+    Server::new(ServerProperties::load_server_properties().unwrap())
+});
+
+pub static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
+    tokio::runtime::Builder::new_multi_thread().enable_time().enable_io().build().unwrap()
+});
+
+
+
+pub static CONSOLE: LazyLock<Console> = LazyLock::new(|| {
+    Console::new().unwrap()
+});
+
+
 #[tokio::main]
 async fn main() {
 

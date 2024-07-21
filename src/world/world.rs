@@ -1,47 +1,45 @@
-use core::hash;
-use std::error::Error;
-use std::hash::Hash;
-use std::num::NonZeroUsize;
-use std::sync::{Arc, Mutex, RwLock, Weak};
+
+use std::sync::{Arc, Mutex, Weak};
 
 use dashmap::DashMap;
 
-use chashmap::CHashMap;
-use itertools::Itertools;
-use std::collections::{HashMap, HashSet};
-use uuid::Uuid;
+
+
+
 
 use crate::data_types::identifier::Identifier;
-use crate::entity::entity_base::EntityBase;
-use crate::packet::play::{self, CUpdateTime};
+use crate::data_types::registry::DimensionProperties;
+//use crate::entity::entity_base::EntityBase;
+use crate::packet::play::CUpdateTime;
 use crate::player::Player;
-use crate::THE_SERVER;
+use crate::{SERVER_REGISTRY, THE_SERVER};
 
-use rayon::iter::*;
 
-use super::chunk::{Chunk, ChunkCache};
-use super::region::{LoadRegion, TicketRegion, TicketType};
 
-const TIME_DAY: i64 = 0;
-const TIME_NOON: i64 = 6000;
-const TIME_NIGHT: i64 = 12000;
-const TIME_MIDNIGHT: i64 = 18000;
+use super::chunk_loader::ChunkLoader;
 
-pub(in super) trait WorldTrait {}
+pub const TIME_DAY: i64 = 0;
+pub const TIME_NOON: i64 = 6000;
+pub const TIME_NIGHT: i64 = 12000;
+pub const TIME_MIDNIGHT: i64 = 18000;
+
+
 
 pub struct World {
     players: DashMap<i32, Weak<Player>>,
-    loaded_entities: DashMap<i32, Weak<dyn EntityBase + Send + Sync>>,
-    identifier: Identifier,
+    //loaded_entities: DashMap<i32, Weak<dyn EntityBase + Send + Sync>>,
+    dimension_type: Identifier,
+    level_name: String,
     chunk_sections: u8,
     world_age: Mutex<i64>,
     world_time: Mutex<i64>,
-    beds_explode: bool,
-    ticket_regions: RwLock<HashMap<(i32, i32), TicketRegion>>,
-    load_regions: HashMap<(i32, i32), LoadRegion>,
-    loaded_chunks: DashMap<(i32, i32), Arc<Mutex<Chunk>>>,
-    tickets: Mutex<Vec<Arc<Ticket2>>>,
-    chunk_cache: ChunkCache,
+    chunk_loader: ChunkLoader,
+    //beds_explode: bool,
+    //ticket_regions: RwLock<HashMap<(i32, i32), TicketRegion>>,
+    //load_regions: HashMap<(i32, i32), LoadRegion>,
+    //loaded_chunks: DashMap<(i32, i32), Arc<Mutex<Chunk>>>,
+    //tickets: Mutex<Vec<Arc<Ticket2>>>,
+    //chunk_cache: ChunkCache,
 }
 
 impl World {
@@ -50,15 +48,19 @@ impl World {
     /// For the nether, this is 16 (for a max height of 256)
     /// 
     /// Use this function when loading the world from a directory
-    pub fn new(identifier: Identifier, max_height_times_16: u8, world_age: i64, world_time: i64, beds_explode: bool) -> Self {
+    pub fn new(level_name: String, dimension_type: Identifier, world_age: i64, world_time: i64, loader: ChunkLoader) -> Self {
         let the_world = World {
             players : DashMap::with_capacity(THE_SERVER.get_max_players() as usize),
-            loaded_entities: DashMap::new(),
-            identifier : identifier,
-            chunk_sections : max_height_times_16,
-            world_age : world_age.into(),
-            world_time : world_time.into(),
-            beds_explode : beds_explode,
+            //loaded_entities: DashMap::new(),
+            dimension_type : dimension_type.clone(),
+            level_name: level_name,
+            chunk_sections: (Self::get_dimension_info_by_id(dimension_type.to_string().as_str()).get_logical_height()/16).try_into().unwrap(),
+            world_age: Mutex::new(world_age.into()),
+            world_time: Mutex::new(world_time.into()),
+            chunk_loader: loader,
+            
+            //TODO: Move this logic into the chunk loader module
+            /*
             ticket_regions : HashMap::new().into(),
             load_regions : HashMap::new(),
             loaded_chunks : DashMap::new(),
@@ -66,39 +68,28 @@ impl World {
             chunk_cache : ChunkCache::new(NonZeroUsize::new(
                 (((THE_SERVER.get_properties().get_view_distance() + 2) * 2 + 1).pow(2) * THE_SERVER.get_properties().get_max_players()
                 + ((THE_SERVER.get_properties().get_spawn_chunk_radius() + 2) * 2 + 1).pow(2)) as usize
-            ).unwrap()),
+            ).unwrap()),*/
         };
 
         //TODO: use world spawn location instead of 0, 0
-        the_world.create_chunk_ticket((0, 0), 34 - THE_SERVER.get_properties().get_spawn_chunk_radius() as u8, -1, TicketType::Start);
+        //the_world.create_chunk_ticket((0, 0), 34 - THE_SERVER.get_properties().get_spawn_chunk_radius() as u8, -1, TicketType::Start);
 
         the_world
     }
 
-    /// ### NOTE: max_height_times_16 is the world height * 16
-    /// For the overworld, this is 24 (for a max height of 384) \
-    /// For the nether, this is 16 (for a max height of 256)
-    /// 
+    pub fn get_dimension_info(&self) -> &DimensionProperties {
+        Self::get_dimension_info_by_id(self.dimension_type.to_string().as_str())
+    }
+
+    fn get_dimension_info_by_id<'a>(identifier: &str) -> &'a DimensionProperties {
+        SERVER_REGISTRY.get("dimension_type").unwrap().get(&identifier.to_owned()).unwrap().get_element().get_dimension_properties().unwrap()
+    }
+
     /// Use this function to create a new world and create the necessary files
-    pub fn create_new_world(identifier: Identifier, max_height_times_16: u8, beds_explode: bool) -> Option<Self> {
+    pub fn create_new_world(level_name: String, dimension_type: Identifier, loader: ChunkLoader) -> Option<Self> {
         //TODO: create world files
-        let new_world = World {
-            players : DashMap::with_capacity(THE_SERVER.get_max_players() as usize),
-            loaded_entities: DashMap::new(),
-            identifier : identifier,
-            chunk_sections : max_height_times_16,
-            world_age : 0.into(),
-            world_time : TIME_NOON.into(),
-            beds_explode : beds_explode,
-            ticket_regions : HashMap::new().into(),
-            load_regions : HashMap::new(),
-            loaded_chunks : DashMap::new(),
-            tickets: Vec::new().into(),
-            chunk_cache : ChunkCache::new(NonZeroUsize::new(
-                (((THE_SERVER.get_properties().get_view_distance() + 2) * 2 + 1).pow(2) * THE_SERVER.get_properties().get_max_players()
-                + ((THE_SERVER.get_properties().get_spawn_chunk_radius() + 2) * 2 + 1).pow(2)) as usize
-            ).unwrap()),
-        };
+        
+        let new_world = Self::new(level_name, dimension_type, 0, TIME_NOON.into(), loader);
 
         Some(new_world)
     }
@@ -115,11 +106,100 @@ impl World {
         self.chunk_sections
     }
 
-    pub fn load_chunks(&self) {
+    pub fn tick(&mut self) {
+        let mut world_age_lock = self.world_age.lock().unwrap();
+        let mut world_time_lock = self.world_time.lock().unwrap();
+        if *world_age_lock % 20 == 0 {
+            for weak in self.players.iter() {
+                match weak.upgrade() {
+                    Some(arc) => {
+                        let world_age = *world_age_lock;
+                        let world_time = *world_time_lock;
+                        crate::RUNTIME.spawn(async move {
+                            match arc.send_packet(CUpdateTime::new(world_age, world_time)).await {
+                                Ok(_) => (),
+                                Err(_) => {
+                                    arc.disconnect("Connection lost").await;
+                                },
+                            }
+                        });
+                    },
+                    None => {
+                        self.players.remove(weak.key());
+                    }
+                }
+            }
+        }
+
+        //TODO: Plugin Scheduler stuff
+
+        //TODO: World Border Logic
+
+        //TODO: Weather
+
+        *world_age_lock += 1;
+        *world_time_lock = (*world_time_lock + 1) % 24000;
+
+        drop(world_age_lock);
+        drop(world_time_lock);
+
+        if self.get_dimension_info().bed_works() {
+            //TODO: Sleeping logic
+        }
+        
+
+        //TODO: Scheduled commands
+
+        //TODO: Scheduled block ticks
+        //TODO: Scheduled fluid ticks
+
+        //TODO: Long time away: Raid Logic (plugin)
+
+        //TODO: (soon) Chunk Load Level, load chunks
+        
+        //self.handle_tickets();
+        
+        //TODO: 
+        /*for chunk in loaded_chunks {
+            spawn mobs
+            tick ice and snow (later)
+            random ticks
+        }*/
+
+        //TODO: (soon) Send block changes to players
+
+        //TODO: whatever tf points of interest are
+
+
+        //TODO: Send unloaded chunks to chunk cache
+
+        //TODO: (much later, with plugin) Tick dragon fight
+
+        //TODO: for each (concurrent) non-passenger entity:
+        /*
+            - Check if it can despawn
+            - Tick entity
+            - Tick passengers
+        */
+
+        //TODO: tick block entities
+
+        //TODO: handle game events (whatever this implies)
+
+        //TODO: handle incoming packets from players
+        //TODO: send queued packets to players
+        //TODO: send player info to players
+
+
+        //TODO: every 6000 ticks autosave
+        //TODO: run pending tasks
+
+
+        
 
     }
 
-    pub fn handle_tickets(&mut self) {
+    /*pub fn handle_tickets(&mut self) {
 
         let mut ticket_regions_lock = self.ticket_regions.write().unwrap();
         let mut regions_to_recompute: Vec<_> = 
@@ -186,101 +266,10 @@ impl World {
         ticket_regions_lock.retain(|_, ticket_region| {
             ticket_region.get_tickets().len() > 0
         })
-    }
+    }*/
 
-    pub fn tick(&mut self) {
-        let mut world_age_lock = self.world_age.lock().unwrap();
-        let mut world_time_lock = self.world_time.lock().unwrap();
-        if *world_age_lock % 20 == 0 {
-            for weak in self.players.iter() {
-                match weak.upgrade() {
-                    Some(arc) => {
-                        let world_age = *world_age_lock;
-                        let world_time = *world_time_lock;
-                        crate::RUNTIME.spawn(async move {
-                            match arc.send_packet(CUpdateTime::new(world_age, world_time)).await {
-                                Ok(_) => (),
-                                Err(_) => {
-                                    arc.disconnect("Connection lost").await;
-                                },
-                            }
-                        });
-                    },
-                    None => {
-                        self.players.remove(weak.key());
-                    }
-                }
-            }
-        }
-
-        //TODO: Plugin Scheduler stuff
-
-        //TODO: World Border Logic
-
-        //TODO: Weather
-
-        *world_age_lock += 1;
-        *world_time_lock = (*world_time_lock + 1) % 24000;
-
-        drop(world_age_lock);
-        drop(world_time_lock);
-
-        if !self.beds_explode {
-            //TODO: Sleeping logic
-        }
-        
-
-        //TODO: Scheduled commands
-
-        //TODO: Scheduled block ticks
-        //TODO: Scheduled fluid ticks
-
-        //TODO: Long time away: Raid Logic
-
-        //TODO: (soon) Chunk Load Level, load chunks
-        
-        self.handle_tickets();
-        
-        //TODO: 
-        /*for chunk in loaded_chunks {
-            spawn mobs
-            tick ice and snow (later)
-            random ticks
-        }*/
-
-        //TODO: (soon) Send block changes to players
-
-        //TODO: whatever tf points of interest are
-
-
-        //TODO: Send unloaded chunks to chunk cache
-
-        //TODO: (much later, with plugin) Tick dragon fight
-
-        //TODO: for each (concurrent) non-passenger entity:
-        /*
-            - Check if it can despawn
-            - Tick entity
-            - Tick passengers
-        */
-
-        //TODO: tick block entities
-
-        //TODO: handle game events (whatever this implies)
-
-        //TODO: handle incoming packets from players
-        //TODO: send queued packets to players
-        //TODO: send player info to players
-
-
-        //TODO: every 6000 ticks autosave
-        //TODO: run pending tasks
-
-
-        
-
-    }
-
+    
+    /*
     pub fn create_chunk_ticket(&self, location: (i32, i32), level: u8, life_time: i64, ticket_type: TicketType) -> Vec<(i32, i32)> {
         let mut regions: HashSet<(i32, i32)> = HashSet::new();
         let radius = level as i32 - 1;
@@ -410,5 +399,5 @@ impl Ticket2 {
     #[inline]
     pub fn get_radius(&self) -> u8 {
         self.radius
-    }
+    }*/
 }
