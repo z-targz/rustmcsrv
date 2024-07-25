@@ -187,6 +187,7 @@ async fn get_player_uuid(player_name: &String) -> Result<Uuid, Box<dyn Error + S
             Err(e) => Err(e)?
         }
     } else {
+        //Minecraft uses UUID v3
         Ok(uuid::Builder::from_md5_bytes(md5::compute(format!("OfflinePlayer:{player_name}").as_bytes()).0).into_uuid())
     }
 }

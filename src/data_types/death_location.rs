@@ -1,15 +1,17 @@
-use super::{Identifier, Optional, Position, ToProtocol};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+use super::{Identifier, Optional, BlockPos, ToProtocol};
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DeathLocation {
-    death_dimension: Identifier,
-    death_location: Position,
+    dimension: Identifier,
+    pos: BlockPos,
 }
 
 impl ToProtocol for DeathLocation {
     #[inline]
     fn to_protocol_bytes(&self) -> Vec<u8> {
-        self.death_dimension.to_protocol_bytes()//todo finish
+        self.dimension.to_protocol_bytes()//todo finish
     }
 }
 

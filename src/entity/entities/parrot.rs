@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use server_macros::{entity, Breedable, Entity, LivingEntity, Lootable, Mob, TickableEntity};
+use server_macros::{entity, Breedable, Entity, LivingEntity, Lootable, Mob, Tameable, TickableEntity};
 
 
 
@@ -7,15 +7,19 @@ use server_macros::{entity, Breedable, Entity, LivingEntity, Lootable, Mob, Tick
 use crate::{
     entity::TickableEntity, 
     nbt::tags::entity::{
-        breedable_base::{self, BreedableBase}, entity_base::EntityBase, living_base::LivingBase, lootable_base::LootableBase, mob_base::MobBase
+        tameable_base::TameableBase, 
+        entity_base::EntityBase, 
+        living_base::LivingBase, 
+        lootable_base::LootableBase, 
+        mob_base::MobBase,
     }
 };
 
 
 #[entity]
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[derive(Entity, LivingEntity, Mob, Lootable, Breedable, TickableEntity)]
-pub struct EntityPig {
+#[derive(Entity, LivingEntity, Mob, Lootable, Tameable, TickableEntity)]
+pub struct EntityParrot {
     #[serde(flatten)]
     #[tickable]
     #[entity_base]
@@ -32,17 +36,14 @@ pub struct EntityPig {
     mob_base: MobBase<Self>,
 
     #[serde(flatten)]
-    #[tickable]
-    #[breedable_base]
-    breedable_base: BreedableBase<Self>,
+    #[tameable_base]
+    tameable_base: TameableBase<Self>,
     
     #[serde(flatten)]
     #[lootable_base]
     lootable_base: LootableBase<Self>,
 
-
-
-    #[serde(rename = "Saddle")]
-    has_saddle: bool,
+    #[serde(rename = "Variant")]
+    variant: i32,
 }
 

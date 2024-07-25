@@ -43,7 +43,6 @@ use crate::world::World;
 use std::sync::LazyLock;
 
 mod player;
-mod player_data;
 mod connection;
 mod server;
 mod data_types;
@@ -54,6 +53,8 @@ mod world;
 mod game;
 mod console;
 mod entity;
+mod nbt;
+mod item;
 
 //const MTU: usize = 1500;
 

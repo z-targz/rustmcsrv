@@ -81,7 +81,7 @@ pub struct CAcknowledgeBlockChange {
 #[id(0x06)]
 pub struct CSetBlockDestroyStage {
     entity_id: VarInt,
-    location: Position,
+    location: BlockPos,
     destroy_stage: i8,
 }
 
@@ -89,7 +89,7 @@ pub struct CSetBlockDestroyStage {
 #[state(Play)]
 #[id(0x07)]
 pub struct CBlockEntityData {
-    location: Position,
+    location: BlockPos,
     r#type: VarInt,
     nbt_data: NBT,
 }
@@ -101,7 +101,7 @@ pub struct CBlockEntityData {
 /// This shouldn't matter, since the client does not yet use and may never use this value,
 /// so it should just be set to 0.
 pub struct CBlockAction {
-    location: Position,
+    location: BlockPos,
     action_id: u8,
     action_parameter: u8,
     block_type: VarInt,
@@ -115,7 +115,7 @@ pub struct CBlockAction {
 /// 
 /// `block_id` uses a blockstate
 pub struct CBlockUpdate {
-    location: Position,
+    location: BlockPos,
     block_id: VarInt,
 }
 

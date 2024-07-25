@@ -13,7 +13,7 @@ use crate::packet::{SPacket, play::*};
 use crate::THE_SERVER;
 
 pub(in crate::state) async fn play_state(player_ref: Arc<Player>) {
-    let mut lock = player_ref.get_connection().write().await;
+    let mut lock = player_ref.get_connection().lock().await;
     lock.set_connection_state(ConnectionState::Play).await;
     drop(lock);
     debug!("Made it to the play state!");
@@ -107,7 +107,7 @@ fn keep_alive(weak: Weak<Player>) -> mpsc::Sender<i64>{
             match weak.upgrade() {
                 Some(player) => {
                     //potential BUG: Client might not immediately send the keep alive packet
-                    let lock = player.get_connection().write().await;
+                    let lock = player.get_connection().lock().await;
                     let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
                     match time::timeout(crate::TIMEOUT, lock.send_packet(CKeepAlive_Play::new(time))).await {
                         Ok(_) => {

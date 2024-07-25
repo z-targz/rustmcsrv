@@ -6,6 +6,7 @@ pub mod registry;
 pub mod tags;
 
 pub mod angle;
+pub mod block_position;
 pub mod chunk;
 pub mod datapack;
 pub mod death_location;
@@ -32,6 +33,7 @@ pub mod data_types;
 #[allow(unused)]
 pub use {
     angle::Angle,
+    block_position::BlockPos,
     chunk::ProtocolChunk,
     death_location::DeathLocation,
     identifier::Identifier, 
@@ -40,7 +42,7 @@ pub use {
     inferred_byte_array::InferredByteArray,
 
     nbt::NBT,
-    position::Position,
+    position::Pos,
     property_array::Property,
     property_array::PropertyArray,
     statistic_array::Statistic,

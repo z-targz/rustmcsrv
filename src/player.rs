@@ -17,6 +17,7 @@ use uuid::Uuid;
 use crate::connection::ConnectionError;
 use crate::data_types::text_component::Nbt;
 use crate::data_types::TextComponent;
+use crate::entity::entities::player::EntityPlayer;
 use crate::packet;
 use crate::packet::configuration::CDisconnect_Config;
 use crate::packet::play::CDisconnect_Play;
@@ -25,7 +26,6 @@ use crate::packet::SPacket;
 use crate::TIMEOUT;
 use crate::connection::Connection;
 use crate::packet::login::CDisconnect_Login;
-use crate::player_data::PlayerData;
 
 
 #[derive(Debug)]
@@ -44,8 +44,8 @@ pub struct Player {
     id: OnceLock<i32>,
     name: String,
     uuid: Uuid,
-    connection: RwLock<Connection>,
-    data: RwLock<Option<PlayerData>>,
+    connection: Mutex<Connection>,
+    data: RwLock<Option<EntityPlayer>>,
     recv_queue: std::sync::Mutex<VecDeque<SPacket>>,
     permissions: std::sync::RwLock<Box<HashMap<String, bool>>>,
 }
@@ -57,7 +57,7 @@ impl<'a> Player {
             id : OnceLock::new(), //temp value is changed quickly
             name : name, 
             uuid : uuid, 
-            connection : RwLock::new(connection),
+            connection : Mutex::new(connection),
             data : RwLock::new(None),
             recv_queue : std::sync::Mutex::new(VecDeque::new()),
             permissions : std::sync::RwLock::new(Box::new(HashMap::new())),
@@ -66,7 +66,7 @@ impl<'a> Player {
 
 
 
-    pub fn get_connection(&self) -> &RwLock<Connection> {
+    pub fn get_connection(&self) -> &Mutex<Connection> {
         &self.connection
     }
 
@@ -86,11 +86,7 @@ impl<'a> Player {
         }
     }
 
-    pub async fn set_player_data(&self, data: PlayerData) {
-        let mut lock = self.data.write().await;
-            *lock = Some(data);
-        drop(lock);
-    }
+
 
     pub fn get_name(&self) -> &String {
         &self.name
@@ -101,7 +97,7 @@ impl<'a> Player {
     }
 
     pub async fn read_next_packet(&self) -> Result<packet::SPacket, ConnectionError> {
-        let connection_lock = self.connection.read().await;
+        let connection_lock = self.connection.lock().await;
             connection_lock.read_next_packet().await
     }
 
@@ -111,12 +107,12 @@ impl<'a> Player {
     }
 
     pub async fn send_packet(&self, packet: impl Clientbound) -> Result<(), ConnectionError> {
-        let connection_lock = self.connection.read().await;
+        let connection_lock = self.connection.lock().await;
             connection_lock.send_packet(packet).await
     }
 
     pub async fn get_connection_state(&self) -> ConnectionState {
-        let connection_lock = self.connection.read().await;
+        let connection_lock = self.connection.lock().await;
             connection_lock.get_connection_state().await
     }
 
@@ -190,7 +186,7 @@ impl Players {
         
         let player_arc = Arc::new(player);
 
-        let mut connection_lock = player_arc.get_connection().write().await;
+        let mut connection_lock = player_arc.get_connection().lock().await;
             connection_lock.set_owner(player_arc.clone());
         drop(connection_lock);
 

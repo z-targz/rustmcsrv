@@ -4,6 +4,7 @@ extern crate proc_macro;
 extern crate seq_macro;
 
 
+use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::ops::Add;
@@ -24,8 +25,11 @@ use quote::quote;
 use quote::ToTokens;
 
 use registry::Mapping;
+use syn::spanned::Spanned;
+use syn::visit::Visit;
 use syn::Data;
 use syn::DataStruct;
+use syn::DeriveInput;
 use syn::Fields;
 use syn::parse_macro_input;
 use syn::FieldsNamed;
@@ -42,17 +46,7 @@ mod registry;
 mod entity;
 mod packet;
 
-lazy_static!{
-    // static ref HANDSHAKE_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
-    // static ref STATUS_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
-    // static ref LOGIN_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
-    // static ref CONFIGURATION_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
-    // static ref PLAY_PACKETS: Mutex<HashMap<i32, String>> = Mutex::new(HashMap::new());
-
-    // static ref ENTITIES: Mutex<HashMap<(String, Vec<String>, Vec<(String, String, Vec<String>)>), Vec<String>>> = Mutex::new(HashMap::new());
-
-    // static ref REGISTRY: Mutex<HashMap<String, Mapping>> = Mutex::new(registry::read_registry_json());
-}
+use entity::EntityMacroError;
 
 static HANDSHAKE_PACKETS: LazyLock<Mutex<HashMap<i32, String>>> = LazyLock::new(|| {
     Mutex::new(HashMap::new())
@@ -70,14 +64,8 @@ static PLAY_PACKETS: LazyLock<Mutex<HashMap<i32, String>>> = LazyLock::new(|| {
     Mutex::new(HashMap::new())
 });
 
-static ENTITIES: LazyLock<Mutex<HashMap<
-    (
-        String, 
-        Vec<String>, 
-        Vec<(String, String, Vec<String>)>
-    ), 
-    Vec<String>
->>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static ENTITIES: LazyLock<Mutex<HashMap<String,String>>> = 
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 static REGISTRY: LazyLock<Mutex<HashMap<String, Mapping>>> = LazyLock::new(|| {
     Mutex::new(registry::read_registry_json())
@@ -93,91 +81,702 @@ pub fn derive_entity_base(input: TokenStream) -> TokenStream {
 
 
 
-#[proc_macro_derive(EntityTrait, attributes(macroception))]
-pub fn derive_entity_trait(input: TokenStream) -> TokenStream {
-    let ast = syn::parse(input).unwrap();
+trait AttrsHelper {
+    fn contains(&self, val: &str) -> bool;
+    fn index_of(&self, val: &str) -> Option<usize>;
 
-    let (
-        name, 
-        fields,
-    ) = impl_entity_trait(&ast);
-    
-    let name = name.to_string();
+    fn span_of_first(&self, val:&str) -> Option<proc_macro2::Span>;
+}
 
-    
-
-    //let mut lock = TRAIT_NAMES.lock().unwrap();
-    //lock.push(name.clone());
-    //drop(lock);
-
-    // let mut getters: Vec<String> = Vec::new();
-    // let mut setters: Vec<String> = Vec::new();
-    
-    for field in &fields.named {
-        field.attrs.iter().filter_map(|attr| {
-            match &attr.meta {
-                syn::Meta::Path(_) => None,
-                syn::Meta::List(l) => {
-                    match l.path.get_ident().unwrap().to_string().as_str() {
-                        "server_macros" => {
-                            Some(&l.tokens)
-                        }
-                        _ => None
-                    }
-                },
-                syn::Meta::NameValue(_) => None,
-            }
+impl AttrsHelper for Vec<syn::Attribute> {
+    fn contains(&self, val: &str) -> bool {
+        self.iter()
+            .map(|attr| {
+                attr.meta.path().get_ident().unwrap().to_string()
+            }).collect::<Vec<_>>()
+            .contains(&val.to_owned())
+    }
+    fn index_of(&self, val: &str) -> Option<usize> {
+        self.iter().position(|attr| {
+            attr.meta.path().get_ident().unwrap().to_string() == val.to_owned()
+            
         })
-        
-        .for_each(|token_stream| {
-            let stream: Result<syn::Expr, syn::Error> = syn::parse(token_stream.clone().into());
-            match stream {
-                Ok(expr) => {
-                    let expression = expr.to_token_stream().to_string();
-                    if expression != "skip" {
-                        if expression != "skip_getter" {
-                            //todo!()
-                        }
-                        if expression != "skip_setter" {
-                            //todo!()
-                        }
+    }
+
+    fn span_of_first(&self, val: &str) -> Option<proc_macro2::Span> {
+        match self.index_of(val) {
+            Some(idx) => Some(self.get(idx).span()),
+            None => None,
+        }
+    }
+
+}
+
+
+
+#[proc_macro_derive(TickableEntity, attributes(tickable, tick))]
+pub fn derive_tickable_entity(input: TokenStream) -> TokenStream {
+
+    let ast: DeriveInput = syn::parse(input).unwrap();
+    
+    let struct_name = &ast.ident.to_token_stream();
+    
+    match &ast.attrs.span_of_first("tickable") {
+        Some(span) => {
+            return syn::Error::new(
+                span.clone(),
+                "cannot apply field attribute `#[tickable]` to a struct"
+            ).to_compile_error().into()
+        },
+        None => (),
+    }
+
+    let mut custom_tick_function : String = String::new();
+    match ast.attrs.index_of("tick") {
+        Some(idx) => {
+            match ast.attrs.get(idx).unwrap().meta.require_name_value() {
+                Ok(name_val) => {
+                    match &name_val.value {
+                        syn::Expr::Lit(lit) => {
+                            match &lit.lit {
+                                syn::Lit::Str(lit_str) => {
+                                    custom_tick_function = format!(
+                                        "{}(self);",
+                                        lit_str.value()
+                                    )
+                                },
+                                
+                                _ => return syn::Error::new(
+                                    name_val.value.span(), 
+                                    "must be a string literal"
+                                ).to_compile_error().into(),
+                            }
+                        },
+                        _ => return syn::Error::new(
+                            name_val.value.span(), 
+                            "must be a string literal"
+                        ).to_compile_error().into(),
                     }
                 },
                 Err(_) => (),
             }
-        });
-    }    
+        },
+        None => {
+            ()
+        },
+    };
+    let custom_tick_function: proc_macro2::TokenStream = custom_tick_function.parse().unwrap();
+
     
-    let trait_name: proc_macro2::TokenStream = 
-        String::from("Trait")
-            .add(name.to_string().as_str())
-            .parse()
-            .unwrap();
+    match &ast.data {
+        Data::Struct(data_struct) => {
+            match &data_struct.fields {
+                Fields::Named(fields_named) => {
+                    let mut tickable_fields: Vec<String> = Vec::new();
 
-    let name: proc_macro2::TokenStream = name.parse().unwrap();
-    quote!{
-        pub trait #trait_name {
+                    for field in &fields_named.named {
+                        if field.attrs.contains("tickable")
+                        {
+                            tickable_fields.push(field.ident.clone().unwrap().to_string());
+                        }
+                    }
 
-        }
+                    if tickable_fields.len() == 0 {
+                        return syn::Error::new(
+                            ast.ident.span(),
+                            format!(
+                                "no fields in `{}` are tickable. Mark fields as tickable with `#[tickable]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
 
-        impl #trait_name for #name {
-            
-        }
-    }.into()
+                    
+                    let body: proc_macro2::TokenStream = tickable_fields.into_iter()
+                        .map(|field| {
+                            format!("self.{field}.tick();")
+                        }).collect::<Vec<String>>()
+                        .join("").parse().unwrap();
+
+
+                    
+
+                    return quote! {
+                        impl TickableEntity for #struct_name {
+                            fn tick(&mut self) {
+                                #body
+                                #custom_tick_function
+                            }
+                        }
+                    }.into()
+                    
+                },
+                _ => return syn::Error::new(
+                    ast.ident.span(),
+                    format!("`{struct_name}` has no named fields")
+                ).to_compile_error().into()
+            }
+        },
+        _ => return syn::Error::new(
+            ast.ident.span(), 
+            format!("`{struct_name}` is not a data struct")
+        ).to_compile_error().into()
+        
+    }
+    
+    
 }
 
-fn impl_entity_trait(ast: &syn::DeriveInput) -> (&Ident, &FieldsNamed) {
-    let fields = match &ast.data {
-        Data::Struct(DataStruct{ 
-            fields: Fields::Named(it), 
-            struct_token : _, 
-            semi_token : _ }
-        ) => it,
-        Data::Struct(_) => panic!("Expected a `struct` with named fields."),
-        Data::Enum(_) | Data::Union(_) => panic!("#[Derive(EntityTrait)] is only implemented for `struct`s."),
-    };
+#[proc_macro_attribute]
+pub fn entity(attrs: TokenStream, input: TokenStream) -> TokenStream {
+    input
+}
+
+#[proc_macro_derive(Entity, attributes(entity_base))]
+pub fn entity_base(input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse(input).unwrap();
     
-    (&ast.ident, fields)
+    let struct_name = &ast.ident.to_token_stream();
+
+    match &ast.attrs.span_of_first("entity_base") {
+        Some(span) => {
+            return syn::Error::new(
+                span.clone(),
+                "cannot apply field attribute `#[entity_base]` to a struct"
+            ).to_compile_error().into()
+        },
+        None => (),
+    }
+
+    match &ast.data {
+        Data::Struct(data_struct) => {
+            match &data_struct.fields {
+                Fields::Named(fields_named) => {
+                    let mut entity_base_fields: Vec<String> = Vec::new();
+
+                    for field in &fields_named.named {
+                        if field.attrs.contains("entity_base")
+                        {
+                            entity_base_fields.push(field.ident.clone().unwrap().to_string());
+                        }
+                    }
+
+                    if entity_base_fields.len() == 0 {
+                        return syn::Error::new(
+                            ast.ident.span(),
+                            format!(
+                                "no field in `{}` is marked `#[entity_base]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
+
+                    if entity_base_fields.len() > 1 {
+                        return syn::Error::new(
+                            entity_base_fields.get(1).unwrap().span(),
+                            format!(
+                                "more than one field in `{}` is marked `#[entity_base]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
+
+                    let field_name: proc_macro2::TokenStream = entity_base_fields.get(0).unwrap().parse().unwrap();
+
+                    return quote! {
+                        use crate::nbt::tags::entity::entity_base::TraitEntityBase;
+                        impl TraitEntityBase for #struct_name {
+                            fn base_entity_tags(&self) -> &EntityBase<Self> {
+                                &self.#field_name
+                            }
+
+                            fn base_entity_tags_mut(&mut self) -> &mut EntityBase<Self> {
+                                &mut self.#field_name
+                            }
+                        }
+                    }.into()
+                    
+                },
+                _ => return syn::Error::new(
+                    ast.ident.span(),
+                    format!("`{struct_name}` has no named fields")
+                ).to_compile_error().into()
+            }
+        },
+        _ => return syn::Error::new(
+            ast.ident.span(), 
+            format!("`{struct_name}` is not a data struct")
+        ).to_compile_error().into()
+        
+    }
+}
+
+#[proc_macro_derive(LivingEntity, attributes(living_base))]
+pub fn living_base(input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse(input).unwrap();
+    
+    let struct_name = &ast.ident.to_token_stream();
+
+    match &ast.attrs.span_of_first("living_base") {
+        Some(span) => {
+            return syn::Error::new(
+                span.clone(),
+                "cannot apply field attribute `#[living_base]` to a struct"
+            ).to_compile_error().into()
+        },
+        None => (),
+    }
+
+    match &ast.data {
+        Data::Struct(data_struct) => {
+            match &data_struct.fields {
+                Fields::Named(fields_named) => {
+                    let mut living_base_fields: Vec<String> = Vec::new();
+
+                    for field in &fields_named.named {
+                        if field.attrs.contains("living_base")
+                        {
+                            living_base_fields.push(field.ident.clone().unwrap().to_string());
+                        }
+                    }
+
+                    if living_base_fields.len() == 0 {
+                        return syn::Error::new(
+                            ast.ident.span(),
+                            format!(
+                                "no field in `{}` is marked `#[living_base]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
+
+                    if living_base_fields.len() > 1 {
+                        return syn::Error::new(
+                            living_base_fields.get(1).unwrap().span(),
+                            format!(
+                                "more than one field in `{}` is marked `#[living_base]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
+
+                    let field_name: proc_macro2::TokenStream = living_base_fields.get(0).unwrap().parse().unwrap();
+
+                    return quote! {
+                        use crate::nbt::tags::entity::living_base::TraitLivingBase;
+                        impl TraitLivingBase for #struct_name {
+                            fn living_tags(&self) -> &LivingBase<Self> {
+                                &self.#field_name
+                            }
+
+                            fn living_tags_mut(&mut self) -> &mut LivingBase<Self> {
+                                &mut self.#field_name
+                            }
+                        }
+                    }.into()
+                    
+                },
+                _ => return syn::Error::new(
+                    ast.ident.span(),
+                    format!("`{struct_name}` has no named fields")
+                ).to_compile_error().into()
+            }
+        },
+        _ => return syn::Error::new(
+            ast.ident.span(), 
+            format!("`{struct_name}` is not a data struct")
+        ).to_compile_error().into()
+    }
+}
+
+#[proc_macro_derive(Mob, attributes(mob_base))]
+pub fn mob_base(input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse(input).unwrap();
+    
+    let struct_name = &ast.ident.to_token_stream();
+
+    match &ast.attrs.span_of_first("mob_base") {
+        Some(span) => {
+            return syn::Error::new(
+                span.clone(),
+                "cannot apply field attribute `#[mob_base]` to a struct"
+            ).to_compile_error().into()
+        },
+        None => (),
+    }
+
+    match &ast.data {
+        Data::Struct(data_struct) => {
+            match &data_struct.fields {
+                Fields::Named(fields_named) => {
+                    let mut mob_base_fields: Vec<String> = Vec::new();
+
+                    for field in &fields_named.named {
+                        if field.attrs.contains("mob_base")
+                        {
+                            mob_base_fields.push(field.ident.clone().unwrap().to_string());
+                        }
+                    }
+
+                    if mob_base_fields.len() == 0 {
+                        return syn::Error::new(
+                            ast.ident.span(),
+                            format!(
+                                "no field in `{}` is marked `#[mob_base]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
+
+                    if mob_base_fields.len() > 1 {
+                        return syn::Error::new(
+                            mob_base_fields.get(1).unwrap().span(),
+                            format!(
+                                "more than one field in `{}` is marked `#[mob_base]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
+
+                    let field_name: proc_macro2::TokenStream = mob_base_fields.get(0).unwrap().parse().unwrap();
+
+                    return quote! {
+                        use crate::nbt::tags::entity::mob_base::TraitMobBase;
+                        impl TraitMobBase for #struct_name {
+                            fn mob_tags(&self) -> &MobBase<Self> {
+                                &self.#field_name
+                            }
+
+                            fn mob_tags_mut(&mut self) -> &mut MobBase<Self> {
+                                &mut self.#field_name
+                            }
+                        }
+                    }.into()
+                    
+                },
+                _ => return syn::Error::new(
+                    ast.ident.span(),
+                    format!("`{struct_name}` has no named fields")
+                ).to_compile_error().into()
+            }
+        },
+        _ => return syn::Error::new(
+            ast.ident.span(), 
+            format!("`{struct_name}` is not a data struct")
+        ).to_compile_error().into()
+    }
+}
+
+#[proc_macro_derive(Lootable, attributes(lootable_base))]
+pub fn lootable_base(input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse(input).unwrap();
+    
+    let struct_name = &ast.ident.to_token_stream();
+
+    match &ast.attrs.span_of_first("lootable_base") {
+        Some(span) => {
+            return syn::Error::new(
+                span.clone(),
+                "cannot apply field attribute `#[lootable_base]` to a struct"
+            ).to_compile_error().into()
+        },
+        None => (),
+    }
+
+    match &ast.data {
+        Data::Struct(data_struct) => {
+            match &data_struct.fields {
+                Fields::Named(fields_named) => {
+                    let mut lootable_base_fields: Vec<String> = Vec::new();
+
+                    for field in &fields_named.named {
+                        if field.attrs.contains("lootable_base")
+                        {
+                            lootable_base_fields.push(field.ident.clone().unwrap().to_string());
+                        }
+                    }
+
+                    if lootable_base_fields.len() == 0 {
+                        return syn::Error::new(
+                            ast.ident.span(),
+                            format!(
+                                "no field in `{}` is marked `#[lootable_base]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
+
+                    if lootable_base_fields.len() > 1 {
+                        return syn::Error::new(
+                            lootable_base_fields.get(1).unwrap().span(),
+                            format!(
+                                "more than one field in `{}` is marked `#[lootable_base]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
+
+                    let field_name: proc_macro2::TokenStream = lootable_base_fields.get(0).unwrap().parse().unwrap();
+
+                    return quote! {
+                        use crate::nbt::tags::entity::lootable_base::TraitLootableBase;
+                        impl TraitLootableBase for #struct_name {
+                            fn lootable_tags(&self) -> &LootableBase<Self> {
+                                &self.#field_name
+                            }
+
+                            fn lootable_tags_mut(&mut self) -> &mut LootableBase<Self> {
+                                &mut self.#field_name
+                            }
+                        }
+                    }.into()
+                    
+                },
+                _ => return syn::Error::new(
+                    ast.ident.span(),
+                    format!("`{struct_name}` has no named fields")
+                ).to_compile_error().into()
+            }
+        },
+        _ => return syn::Error::new(
+            ast.ident.span(), 
+            format!("`{struct_name}` is not a data struct")
+        ).to_compile_error().into()
+    }
+}
+
+#[proc_macro_derive(Intelligent, attributes(brain_base))]
+pub fn brain_base(input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse(input).unwrap();
+    
+    let struct_name = &ast.ident.to_token_stream();
+
+    match &ast.attrs.span_of_first("brain_base") {
+        Some(span) => {
+            return syn::Error::new(
+                span.clone(),
+                "cannot apply field attribute `#[brain_base]` to a struct"
+            ).to_compile_error().into()
+        },
+        None => (),
+    }
+
+    match &ast.data {
+        Data::Struct(data_struct) => {
+            match &data_struct.fields {
+                Fields::Named(fields_named) => {
+                    let mut brain_base_fields: Vec<String> = Vec::new();
+
+                    for field in &fields_named.named {
+                        if field.attrs.contains("brain_base")
+                        {
+                            brain_base_fields.push(field.ident.clone().unwrap().to_string());
+                        }
+                    }
+
+                    if brain_base_fields.len() == 0 {
+                        return syn::Error::new(
+                            ast.ident.span(),
+                            format!(
+                                "no field in `{}` is marked `#[brain_base]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
+
+                    if brain_base_fields.len() > 1 {
+                        return syn::Error::new(
+                            brain_base_fields.get(1).unwrap().span(),
+                            format!(
+                                "more than one field in `{}` is marked `#[brain_base]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
+
+                    let field_name: proc_macro2::TokenStream = brain_base_fields.get(0).unwrap().parse().unwrap();
+
+                    return quote! {
+                        use crate::nbt::tags::entity::brain_base::TraitHasBrain;
+                        impl TraitHasBrain for #struct_name {
+                            fn get_brain(&self) -> &Brain<Self> {
+                                &self.#field_name
+                            }
+
+                            fn get_brain_mut(&mut self) -> &mut Brain<Self> {
+                                &mut self.#field_name
+                            }
+                        }
+                    }.into()
+                    
+                },
+                _ => return syn::Error::new(
+                    ast.ident.span(),
+                    format!("`{struct_name}` has no named fields")
+                ).to_compile_error().into()
+            }
+        },
+        _ => return syn::Error::new(
+            ast.ident.span(), 
+            format!("`{struct_name}` is not a data struct")
+        ).to_compile_error().into()
+    }
+}
+
+#[proc_macro_derive(Tameable, attributes(tameable_base))]
+pub fn tameable_base(input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse(input).unwrap();
+    
+    let struct_name = &ast.ident.to_token_stream();
+
+    match &ast.attrs.span_of_first("tameable_base") {
+        Some(span) => {
+            return syn::Error::new(
+                span.clone(),
+                "cannot apply field attribute `#[tameable_base]` to a struct"
+            ).to_compile_error().into()
+        },
+        None => (),
+    }
+
+    match &ast.data {
+        Data::Struct(data_struct) => {
+            match &data_struct.fields {
+                Fields::Named(fields_named) => {
+                    let mut tameable_base_fields: Vec<String> = Vec::new();
+
+                    for field in &fields_named.named {
+                        if field.attrs.contains("tameable_base")
+                        {
+                            tameable_base_fields.push(field.ident.clone().unwrap().to_string());
+                        }
+                    }
+
+                    if tameable_base_fields.len() == 0 {
+                        return syn::Error::new(
+                            ast.ident.span(),
+                            format!(
+                                "no field in `{}` is marked `#[tameable_base]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
+
+                    if tameable_base_fields.len() > 1 {
+                        return syn::Error::new(
+                            tameable_base_fields.get(1).unwrap().span(),
+                            format!(
+                                "more than one field in `{}` is marked `#[tameable_base]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
+
+                    let field_name: proc_macro2::TokenStream = tameable_base_fields.get(0).unwrap().parse().unwrap();
+
+                    return quote! {
+                        use crate::nbt::tags::entity::tameable_base::TraitTameableBase;
+                        impl TraitTameableBase for #struct_name {
+                            fn tameable_tags(&self) -> &TameableBase<Self> {
+                                &self.#field_name
+                            }
+
+                            fn tameable_tags_mut(&mut self) -> &mut TameableBase<Self> {
+                                &mut self.#field_name
+                            }
+                        }
+                    }.into()
+                    
+                },
+                _ => return syn::Error::new(
+                    ast.ident.span(),
+                    format!("`{struct_name}` has no named fields")
+                ).to_compile_error().into()
+            }
+        },
+        _ => return syn::Error::new(
+            ast.ident.span(), 
+            format!("`{struct_name}` is not a data struct")
+        ).to_compile_error().into()
+    }
+}
+
+#[proc_macro_derive(Breedable, attributes(breedable_base))]
+pub fn breedable_base(input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse(input).unwrap();
+    
+    let struct_name = &ast.ident.to_token_stream();
+
+    match &ast.attrs.span_of_first("breedable_base") {
+        Some(span) => {
+            return syn::Error::new(
+                span.clone(),
+                "cannot apply field attribute `#[breedable_base]` to a struct"
+            ).to_compile_error().into()
+        },
+        None => (),
+    }
+
+    match &ast.data {
+        Data::Struct(data_struct) => {
+            match &data_struct.fields {
+                Fields::Named(fields_named) => {
+                    let mut tameable_base_fields: Vec<String> = Vec::new();
+
+                    for field in &fields_named.named {
+                        if field.attrs.contains("breedable_base")
+                        {
+                            tameable_base_fields.push(field.ident.clone().unwrap().to_string());
+                        }
+                    }
+
+                    if tameable_base_fields.len() == 0 {
+                        return syn::Error::new(
+                            ast.ident.span(),
+                            format!(
+                                "no field in `{}` is marked `#[breedable_base]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
+
+                    if tameable_base_fields.len() > 1 {
+                        return syn::Error::new(
+                            tameable_base_fields.get(1).unwrap().span(),
+                            format!(
+                                "more than one field in `{}` is marked `#[breedable_base]`",
+                                struct_name,
+                            )
+                        ).to_compile_error().into()
+                    }
+
+                    let field_name: proc_macro2::TokenStream = tameable_base_fields.get(0).unwrap().parse().unwrap();
+
+                    return quote! {
+                        use crate::nbt::tags::entity::breedable_base::TraitBreedableBase;
+                        impl TraitBreedableBase for #struct_name {
+                            fn breedable_tags(&self) -> &BreedableBase<Self> {
+                                &self.#field_name
+                            }
+
+                            fn breedable_tags_mut(&mut self) -> &mut BreedableBase<Self> {
+                                &mut self.#field_name
+                            }
+                        }
+                    }.into()
+                    
+                },
+                _ => return syn::Error::new(
+                    ast.ident.span(),
+                    format!("`{struct_name}` has no named fields")
+                ).to_compile_error().into()
+            }
+        },
+        _ => return syn::Error::new(
+            ast.ident.span(), 
+            format!("`{struct_name}` is not a data struct")
+        ).to_compile_error().into()
+    }
 }
 
 #[proc_macro]
@@ -248,7 +847,7 @@ fn get_json_map(registry_name: &str) -> Result<HashMap<String, String>, std::io:
         }).collect()
 }
 
-macroception::create_entity_macros!{}
+//macroception::create_entity_macros!{}
 
 #[proc_macro]
 pub fn generate_entity_id_enum(_: TokenStream) -> TokenStream {
@@ -259,6 +858,8 @@ pub fn generate_entity_id_enum(_: TokenStream) -> TokenStream {
 pub fn generate_potion_effect_id_enum(_: TokenStream) -> TokenStream {
     generate_registry_enum("minecraft:mob_effect").into()
 }
+
+
 
 fn generate_registry_enum(registry: &str) -> TokenStream {
     let binding = REGISTRY.lock().unwrap();
@@ -305,43 +906,103 @@ fn generate_registry_enum(registry: &str) -> TokenStream {
 #[proc_macro]
 pub fn create_entity_enum(_: TokenStream) -> TokenStream {
     
+    let src_dir = Path::new(std::env::var("CARGO_MANIFEST_DIR").unwrap().as_str()).join("src");
+    let files = std::fs::read_dir(
+        src_dir
+        .join("entity")
+        .join("entities")).unwrap();
+    
     let mut variants = String::new();
-    let lock = ENTITIES.lock().unwrap();
-    for ((name, attrs, fields), tags) in lock.iter() {
+    let mut imports = String::new();
 
-        let mut body = String::new();
+    let result = files.into_iter()
+        .map(|result| {
+            match result {
+                Ok(dir_entry) => {
+                    let module_path = 
+                    dir_entry
+                        .path()
+                        .strip_prefix(src_dir.to_str().unwrap()).unwrap()
+                        .iter()
+                        .map(|segment| segment.to_str().unwrap().to_owned())
+                        .collect::<Vec<_>>()
+                        .join("::")
+                        .trim_end_matches(".rs")
+                        .to_owned();
+                        
+                    let mut file_contents = String::new();
+                    File::open(dir_entry.path())?.read_to_string(&mut file_contents)?;
+                    let file_src = syn::parse_file(&file_contents.as_str())?;
+                    
+                    struct FileVisitor {
+                        pub tag_names: Vec<String>,
+                    };
+                    impl FileVisitor {
+                        pub fn new(file_path: PathBuf) -> Self {
+                            Self { tag_names: Vec::new() }
+                        }
+                    }
+                    impl <'ast> Visit<'ast> for FileVisitor {
+                        
+                        fn visit_item_struct(&mut self, item: &'ast syn::ItemStruct) {
+                            let mut to_add: bool = false;
+                            for attr in &item.attrs {
+                                match attr.path().get_ident() {
+                                    Some(ident) => {
+                                        if ident.to_string().as_str() == "entity" {
+                                            to_add = true;
+                                        }
+                                    },
+                                    None => (),
+                                }
+                            }
+                            if to_add {
+                                self.tag_names.push(item.ident.to_string());
+                            }
+                        }
+                    }
+                    let mut file_visitor = FileVisitor::new(dir_entry.path());
+                    file_visitor.visit_file(&file_src);
 
-        (0..tags.len()).for_each(|i| {
-            body += (format!("
-            #[serde(flatten)]
-            __field_{i}: {tag},
-            ", tag=tags.get(i).unwrap())).as_str()
-        });
 
-        for (name, r_type, field_attrs) in fields {
-            body += (format!("
-            {attributes}
-            {name}: {r_type},
-            ", attributes=field_attrs.join("\n"))).as_str()
-        }
-
-        variants += (format!("
-            {attributes}
-            {name} {{
-                {body}
-            }}
-        ",attributes=attrs.join("\n"))).as_str();
-    }
+                    //let tag_name = module_name.to_case(Case::Pascal);
+                    Ok((file_visitor.tag_names, module_path))
+                },
+                Err(e) => Err(EntityMacroError::IOError(e)),
+            }
+            
+            })
+        .map(|result|
+        {
+            match result {
+                Ok((tag_names, module_path)) => {
+                    tag_names.into_iter().for_each(|tag_name| {
+                        let body = format!("
+                            #[serde(flatten)]
+                            __field: {tag_name},
+                            ");
+                        
+                        variants += (format!("
+                            {tag_name} {{
+                                {body}
+                            }},
+                        ")).as_str();
+                        
+                        imports += format!("use crate::{module_path}::{tag_name};\n").as_str();
+                    });
+                    Ok(())
+                },
+                Err(e) => Err(e),
+            }
+        }).collect::<Result<(),EntityMacroError>>();
     
     let variants: proc_macro2::TokenStream = variants.parse().unwrap();
-
+    let imports: proc_macro2::TokenStream = imports.parse().unwrap();
     quote!{
+        #imports
         #[derive(Serialize, Deserialize, Debug, Clone)]
         #[serde(untagged)]
         pub enum Entity {
-            EntityBase {
-                __field_0: EntityBase,
-            },
             #variants
         }
     }.into()
