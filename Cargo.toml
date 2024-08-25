@@ -72,7 +72,8 @@ features = [
 [dependencies.serde]
 version = "1.0.197"
 features = [
-    "derive"
+    "derive",
+    "rc",
 ]
 
 [dependencies.serde_repr]

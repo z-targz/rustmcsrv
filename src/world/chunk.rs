@@ -101,7 +101,7 @@ impl Chunk {
         for entry in self.entities.iter() {
             match entry.value().upgrade() {
                 Some(entity) => {
-                    //entity.lock().unwrap().tick()
+                    ()
                 },
                 None => {
                     self.entities.remove(entry.key());

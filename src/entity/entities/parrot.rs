@@ -1,5 +1,13 @@
 use serde::{Deserialize, Serialize};
-use server_macros::{entity, Breedable, Entity, LivingEntity, Lootable, Mob, Tameable, TickableEntity};
+use server_macros::{
+    entity,  
+    Entity, 
+    LivingEntity, 
+    Lootable, 
+    Mob, 
+    Tameable, 
+    TickableEntity,
+};
 
 
 
@@ -7,11 +15,7 @@ use server_macros::{entity, Breedable, Entity, LivingEntity, Lootable, Mob, Tame
 use crate::{
     entity::TickableEntity, 
     nbt::tags::entity::{
-        tameable_base::TameableBase, 
-        entity_base::EntityBase, 
-        living_base::LivingBase, 
-        lootable_base::LootableBase, 
-        mob_base::MobBase,
+        entity_base::EntityBase, living_base::{DefaultHealth, LivingBase}, lootable_base::LootableBase, mob_base::MobBase, tameable_base::TameableBase
     }
 };
 
@@ -47,3 +51,8 @@ pub struct EntityParrot {
     variant: i32,
 }
 
+impl DefaultHealth for EntityParrot {
+    fn get_default_health() -> f32 {
+        6.0
+    }
+}

@@ -5,6 +5,7 @@
 #![recursion_limit = "256"]
 #![feature(allocator_api)]
 #![feature(async_closure, async_fn_traits)]
+#![feature(specialization)]
 
 
 #[macro_use]

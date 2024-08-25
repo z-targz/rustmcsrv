@@ -7,7 +7,14 @@ use server_macros::{entity, Breedable, Entity, LivingEntity, Lootable, Mob, Tick
 use crate::{
     entity::TickableEntity, 
     nbt::tags::entity::{
-        breedable_base::{self, BreedableBase}, entity_base::EntityBase, living_base::LivingBase, lootable_base::LootableBase, mob_base::MobBase
+        breedable_base::BreedableBase, 
+        entity_base::EntityBase, 
+        living_base::{
+            DefaultHealth, 
+            LivingBase
+        }, 
+        lootable_base::LootableBase, 
+        mob_base::MobBase
     }
 };
 
@@ -46,3 +53,8 @@ pub struct EntityPig {
     has_saddle: bool,
 }
 
+impl DefaultHealth for EntityPig {
+    fn get_default_health() -> f32 {
+        10.0
+    }
+}

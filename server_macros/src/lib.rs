@@ -283,8 +283,14 @@ pub fn entity_base(input: TokenStream) -> TokenStream {
 
                     let field_name: proc_macro2::TokenStream = entity_base_fields.get(0).unwrap().parse().unwrap();
 
+                    let entity_id: proc_macro2::TokenStream = match ast.ident.to_string().as_str() {
+                        "EntityPlayer" => "None".parse().unwrap(),
+                        id => format!("Some(EnumEntityType::{})", id.trim_start_matches("Entity")).parse().unwrap(),
+                    };
+
                     return quote! {
                         use crate::nbt::tags::entity::entity_base::TraitEntityBase;
+                        use crate::entity::EnumEntityType;
                         impl TraitEntityBase for #struct_name {
                             fn base_entity_tags(&self) -> &EntityBase<Self> {
                                 &self.#field_name
@@ -292,6 +298,10 @@ pub fn entity_base(input: TokenStream) -> TokenStream {
 
                             fn base_entity_tags_mut(&mut self) -> &mut EntityBase<Self> {
                                 &mut self.#field_name
+                            }
+
+                            fn get_identifier() -> Option<EnumEntityType> {
+                                #entity_id
                             }
                         }
                     }.into()
@@ -914,6 +924,7 @@ pub fn create_entity_enum(_: TokenStream) -> TokenStream {
     
     let mut variants = String::new();
     let mut imports = String::new();
+    let mut getters = String::new();
 
     let result = files.into_iter()
         .map(|result| {
@@ -989,6 +1000,12 @@ pub fn create_entity_enum(_: TokenStream) -> TokenStream {
                         ")).as_str();
                         
                         imports += format!("use crate::{module_path}::{tag_name};\n").as_str();
+                        
+                        getters += format!("Entity::{tag_name} {{__field}} => {{
+                            if {tag_name}::IS_TICKABLE {{
+                                __field.tick()
+                            }}
+                        }},").as_str();
                     });
                     Ok(())
                 },
@@ -998,6 +1015,8 @@ pub fn create_entity_enum(_: TokenStream) -> TokenStream {
     
     let variants: proc_macro2::TokenStream = variants.parse().unwrap();
     let imports: proc_macro2::TokenStream = imports.parse().unwrap();
+    let getters: proc_macro2::TokenStream = getters.parse().unwrap();
+
     quote!{
         #imports
         #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -1005,6 +1024,15 @@ pub fn create_entity_enum(_: TokenStream) -> TokenStream {
         pub enum Entity {
             #variants
         }
+
+        impl Entity {
+            pub fn try_tick(&mut self) {
+                match self {
+                    #getters
+                }
+            }
+        }
+        
     }.into()
 }
 

@@ -3,7 +3,25 @@ use std::{default, sync::Weak};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use server_macros::{entity, Entity, LivingEntity, Mob, TickableEntity};
 
-use crate::{data_types::{DeathLocation, Pos}, entity::{Entity, TickableEntity}, item::{InventoryItem, Item}, nbt::tags::entity::{entity_base::EntityBase, living_base::LivingBase, mob_base::MobBase}, world::generator_settings::Dimension};
+use crate::{
+    data_types::{
+        DeathLocation, 
+        Pos
+    }, 
+    entity::{
+        Entity, 
+        TickableEntity
+    }, 
+    item::{
+        InventoryItem, 
+        Item
+    }, 
+    nbt::tags::entity::{
+        entity_base::EntityBase, 
+        living_base::{LivingBase, DefaultHealth},
+        mob_base::MobBase
+    }
+};
 
 use super::parrot::EntityParrot;
 
@@ -117,6 +135,12 @@ pub struct EntityPlayer {
     xp_total: i32,
 }
 
+impl DefaultHealth for EntityPlayer {
+    fn get_default_health() -> f32 {
+        20.0
+    }
+}
+
 impl Default for EntityPlayer {
     fn default() -> Self {
         Self { 
@@ -130,7 +154,7 @@ impl Default for EntityPlayer {
             entered_nether_position: None, 
             food_exhaustion_level: 0.0f32, 
             food_level: 20, 
-            food_saturation_level: 5, 
+            food_saturation_level: 5.0, 
             food_tick_timer: 0, 
             inventory: Some(vec![]), 
             last_death_location: Default::default(), 
@@ -220,6 +244,20 @@ struct PlayerAbilities {
     walk_speed: f32, //defaults to 0.1
 }
 
+impl Default for PlayerAbilities {
+    fn default() -> Self {
+        Self { 
+            flying: Default::default(), 
+            fly_speed: 0.05, 
+            instabuild: Default::default(), 
+            invulnerable: Default::default(), 
+            may_build: true, 
+            may_fly: Default::default(), 
+            walk_speed: 0.1 
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RecipeBook {
@@ -251,3 +289,7 @@ impl Default for WardenSpawnTracker {
         }
     }
 }
+
+pub trait TraitPlayer {}
+
+impl TraitPlayer for EntityPlayer {}

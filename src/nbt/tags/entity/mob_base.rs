@@ -1,11 +1,20 @@
 use std::marker::PhantomData;
 
 use serde::{Deserialize, Serialize};
-use server_macros::{Entity, Intelligent, LivingEntity, Mob};
 
-use crate::{entity::{attribute::Attribute, potion_effect::PotionEffect}, item::Item, nbt::tags::item_base::{ItemBase, TraitItemBase}};
+use crate::{
+    entity::{
+        attribute::Attribute, 
+        potion_effect::PotionEffect
+    }, 
+    item::Item, 
+    nbt::tags::item_base::{
+        ItemBase, 
+        TraitItemBase
+    }
+};
 
-use super::{brain_base::{Brain, TraitHasBrain}, entity_base::TraitEntityBase, living_base::TraitLivingBase};
+use super::living_base::TraitLivingBase;
 
 
 
@@ -27,7 +36,7 @@ pub struct MobBase<T> where T: TraitMobBase {
     armor_drop_chances: Option<Vec<f32>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    armor_items: Option<Vec<Item>>,
+    armor_items: Option<[Option<Item>;4]>,
 
     #[serde(rename = "attributes")]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -51,11 +60,7 @@ pub struct MobBase<T> where T: TraitMobBase {
 
     fall_flying: bool,
 
-    health: f32,
-
-    hurt_by_timestamp: i32,
-
-    hurt_time: i16,
+    
 
     #[serde(skip_serializing_if = "Option::is_none")]
     hand_drop_chances: Option<[f32;2]>, //main hand, offhand
@@ -84,6 +89,34 @@ pub struct MobBase<T> where T: TraitMobBase {
     sleeping_z: Option<i32>,
 }
 
+impl<T> Default for MobBase<T> where T: TraitMobBase {
+    fn default() -> Self {
+        Self { 
+            phantom_data: Default::default(), 
+            absorption_amount: Default::default(), 
+            active_effects: Default::default(), 
+            armor_drop_chances: Default::default(), 
+            armor_items: Default::default(), 
+            attributes: Default::default(), 
+            body_armor_drop_chance: Default::default(), 
+            body_armor_item: Default::default(), 
+            can_pick_up_loot: Default::default(), 
+            death_time: Default::default(), 
+            fall_flying: Default::default(), 
+            
+            hand_drop_chances: Default::default(), 
+            hand_items: Default::default(), 
+            leash: Default::default(), 
+            left_handed: Default::default(), 
+            no_ai: Default::default(), 
+            persistance_required: Default::default(), 
+            sleeping_x: Default::default(), 
+            sleeping_y: Default::default(), 
+            sleeping_z: Default::default() 
+        }
+    }
+}
+
 impl<T> MobBase<T> where T: TraitMobBase {
     pub fn tick(&mut self) {
 
@@ -93,7 +126,10 @@ impl<T> MobBase<T> where T: TraitMobBase {
 pub trait TraitMobBase : TraitLivingBase {
     fn mob_tags(&self) -> &MobBase<Self>;
     fn mob_tags_mut(&mut self) -> &mut MobBase<Self>;
+    
 }
+
+
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum LeashInfo {

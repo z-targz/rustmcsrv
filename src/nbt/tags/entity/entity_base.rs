@@ -2,11 +2,12 @@
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::sync::Weak;
+use std::sync::{Arc, Mutex, Weak};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::data_types::{text_component::Json, TextComponent};
+use crate::entity::entities::player::{EntityPlayer, TraitPlayer};
 use crate::entity::{EnumEntityType, TickableEntity};
 use crate::entity::entity::Entity;
 
@@ -76,6 +77,37 @@ pub struct EntityBase<T>
     u_u_i_d: [i32;4], 
 }
 
+impl<T> Default for EntityBase<T> 
+    where 
+        T: TraitEntityBase
+    {
+    fn default() -> Self {
+        Self { 
+            phantom_data: Default::default(), 
+            air: 300, 
+            custom_name: None, 
+            custom_name_visible: None, 
+            fall_distance: 0.0, 
+            fire: -20, 
+            glowing: None, 
+            has_visual_fire: false, 
+            id: T::get_identifier(), 
+            invulnerable: false, 
+            motion: Default::default(), 
+            no_gravity: false, 
+            on_ground: false, 
+            passengers: Default::default(), //none 
+            portal_cooldown: Default::default(), 
+            pos: Default::default(), 
+            rotation: Default::default(), 
+            silent: None, 
+            tags: Default::default(), 
+            ticks_frozen: None, 
+            u_u_i_d: Self::generate_random_uuid(),
+        }
+    }
+}
+
 impl<T> EntityBase<T> where T: TraitEntityBase {
     pub fn tick(&mut self) {
 
@@ -88,6 +120,7 @@ impl<T> EntityBase<T> where T: TraitEntityBase {
             (self.u_u_i_d[3] as u128)
         )    
     }
+
     pub fn set_uuid(&mut self, uuid: Uuid) {
         let uuid_128 = uuid.as_u128();
         self.u_u_i_d[0] = (uuid_128 >> 96) as i32;
@@ -95,16 +128,34 @@ impl<T> EntityBase<T> where T: TraitEntityBase {
         self.u_u_i_d[2] = (uuid_128 >> 32) as i32;
         self.u_u_i_d[3] = (uuid_128) as i32;
     }
+
+    fn generate_random_uuid() -> [i32;4] {
+        let mut u_u_i_d: [i32;4] = Default::default();
+        let uuid_128 = Uuid::new_v4().as_u128();
+        u_u_i_d[0] = (uuid_128 >> 96) as i32;
+        u_u_i_d[1] = (uuid_128 >> 64) as i32;
+        u_u_i_d[2] = (uuid_128 >> 32) as i32;
+        u_u_i_d[3] = (uuid_128) as i32;
+        u_u_i_d
+    }
 }
 
 pub trait TraitEntityBase: 
-    Debug + Clone + Serialize + for <'a> Deserialize<'a> + Sized
+    Debug + Clone + Serialize + for <'de> Deserialize<'de> + Sized + IsTickable
 {
     fn base_entity_tags(&self) -> &EntityBase<Self>;
 
     fn base_entity_tags_mut(&mut self) -> &mut EntityBase<Self>;
+
+    fn get_identifier() -> Option<EnumEntityType>;
 }
 
+impl<T> IsTickable for T
+    where T: TraitEntityBase {
+        default const IS_TICKABLE: bool = false;
+    }
 
-
+pub trait IsTickable {
+    const IS_TICKABLE: bool;
+}
 
