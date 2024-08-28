@@ -1,46 +1,45 @@
-use std::{io::Write, sync::Mutex};
+use std::{io::Write};
+
 
 use chrono::Local;
 use log::{info, Level, SetLoggerError};
 
 
 use rustyline::{history::FileHistory, DefaultEditor, Editor, ExternalPrinter};
+use tokio::{signal, sync::{mpsc, Mutex}};
 
 
 
 pub struct Console {
     editor: Mutex<Editor<(), FileHistory>>,
-    printer: tokio::sync::Mutex<Box<dyn ExternalPrinter + Send + Sync>>,
+    printer: Mutex<Box<dyn ExternalPrinter + Send + Sync>>,
     logger: ConsoleLogger,
 }
 
 
 impl Console {
-    pub fn new() -> rustyline::Result<Self> {
+    pub fn new(sender: mpsc::Sender<String>) -> rustyline::Result<Self> {
         let mut editor = DefaultEditor::new()?;
         let printer = editor.create_external_printer()?;  
          
         Ok(Console{
             editor : Mutex::new(editor),
-            printer : tokio::sync::Mutex::new(Box::new(printer)),
-            logger : ConsoleLogger::new(),
+            printer : Mutex::new(Box::new(printer)),
+            logger : ConsoleLogger::new(sender),
         })
     }
 
     #[inline]
-    fn print(&self, string: String) {
-        crate::RUNTIME.spawn(async move {
-            let mut printer_lock = crate::CONSOLE.printer.lock().await;
-            if printer_lock.print(string).is_err() {
-                panic!("oops!");
-            }
-        });
-        
+    async fn print(&self, string: String) {
+        let mut printer_lock = self.printer.lock().await;
+        if printer_lock.print(string).is_err() {
+            panic!("oops!");
+        }
     }
     
     #[inline]
-    pub fn println(&self, string: String) {
-        self.print(format!("{string}\n"));
+    pub async fn println(&self, string: String) {
+        self.print(format!("{string}\n")).await;
     }
 
     pub fn get_logger(&self) -> &ConsoleLogger {
@@ -52,9 +51,9 @@ impl Console {
             .map(|()| log::set_max_level(log::LevelFilter::Debug))
     }
 
-    pub fn start(&self) -> rustyline::Result<()> {
+    pub async fn start(&self) -> rustyline::Result<()> {
         loop {
-            let mut editor_lock = self.editor.lock().unwrap();
+            let mut editor_lock = self.editor.lock().await;
             match editor_lock.readline("# ") {
                 Ok(line) => {
                     editor_lock.add_history_entry(line.as_str())?;
@@ -71,8 +70,14 @@ impl Console {
                                     None => (),
                                 }
                             });
-                            //TODO: Stuff
-                            break;
+                            match crate::STOP_SIGNAL.get() {
+                                Some(sig) => {
+                                    let _ = sig.send(true);
+                                    break;
+                                },
+                                None => println!("Server is already stopping"),
+                            }
+                            
                         },
                         _ => println!("Unknown command")
                     }
@@ -84,11 +89,20 @@ impl Console {
     }
 }
 
-pub struct ConsoleLogger;
+pub struct ConsoleLogger {
+    sender: mpsc::Sender<String>,
+}
 
 impl ConsoleLogger {
-    pub fn new() -> Self {
-        ConsoleLogger{}
+    pub fn new(sender: mpsc::Sender<String>) -> Self {
+        ConsoleLogger{
+            sender: sender,
+        }
+    }
+    pub fn send(&self, message: String) {
+        let dt = Local::now();
+        let sender_clone = self.sender.clone();
+        crate::RUNTIME.spawn(async move { sender_clone.send(format!("[{}] {}", dt.format("%H:%M:%S"), message)).await });
     }
 }
 
@@ -98,14 +112,10 @@ impl log::Log for ConsoleLogger {
         metadata.target().starts_with("rustmcsrv") && metadata.level() <= Level::Debug
     }
 
-    #[inline]
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
-            let dt = Local::now();
-            
-            crate::CONSOLE.println(
-                format!("[{}] {}: {}", 
-                dt.format("%H:%M:%S"), 
+            self.send(
+                format!("{}: {}",
                 record.level().to_string().to_uppercase(), 
                 record.args().to_string())
             );

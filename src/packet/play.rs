@@ -272,6 +272,14 @@ pub struct CUpdateTime {
     time_of_day: i64,
 }
 
+#[derive(CPacket)]
+#[state(Play)]
+#[id(0x6C)]
+pub struct CSystemChatMessage {
+    content: TextComponent<Nbt>,
+    overlay: bool,
+}
+
 
 #[derive(SPacket, Debug)]
 #[state(Play)]
@@ -280,3 +288,4 @@ pub struct CUpdateTime {
 pub struct SKeepAlive_Play {
     keep_alive_id: i64,
 }
+

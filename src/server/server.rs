@@ -1,13 +1,26 @@
+use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::RwLock;
 use std::sync::Weak;
 
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::IntoParallelRefMutIterator;
+use rayon::iter::ParallelIterator;
+use tokio::sync::RwLockReadGuard;
+use tokio::sync::RwLockWriteGuard;
 use uuid::Uuid;
 
+use crate::event::EventHandler;
+use crate::event::EventManager;
+use crate::event::HandlerList;
+use crate::event::TraitEvent;
 use crate::player::Player;
 use crate::player::Players;
 
+use crate::world::chunk_loader::Loader;
 use crate::world::World;
 use crate::ServerProperties;
 
@@ -25,9 +38,10 @@ impl std::fmt::Display for ServerFullError {
 pub struct Server {
     //const
     properties: ServerProperties,
-    worlds: Vec<World>,
+    worlds: HashMap<String, Arc<tokio::sync::Mutex<World>>>,
     players: Players,
     entity_id_cap: Mutex<i32>,
+    event_manager: EventManager,
 }
 
 impl Server {
@@ -35,9 +49,10 @@ impl Server {
         let max_players = properties.get_max_players();
         Server { 
             properties : properties,
-            worlds : Vec::with_capacity(3),
+            worlds : HashMap::with_capacity(3),
             players : Players::new(max_players),
-            entity_id_cap : Mutex::new(0)
+            entity_id_cap : Mutex::new(0),
+            event_manager : EventManager::new(),
         }
     }
 
@@ -91,6 +106,29 @@ impl Server {
 
     pub fn drop_player_by_uuid(&self, uuid: Uuid) {
         self.players.drop_by_uuid(uuid);
+    }
+
+    pub async fn tick_worlds(&'static self) {
+        let mut handles = Vec::new();
+        for (_, world) in &self.worlds {
+            handles.push(tokio::spawn(async { world.lock().await.tick().await }))
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+    }
+
+    pub async fn save_worlds(&'static self) {
+
+    }
+
+    pub fn get_event_manager(&self) -> &EventManager {
+        &self.event_manager
+    }
+
+    pub async fn register_event_handler<E: TraitEvent + PartialEq + Clone + 'static>(&self, handler: EventHandler<E>) {
+        self.get_event_manager().register_event_handler::<E>(handler).await;
     }
 
 }

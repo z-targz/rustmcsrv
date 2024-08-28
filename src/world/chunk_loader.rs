@@ -1,64 +1,10 @@
 use std::collections::HashMap;
 
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
+
 use super::anvil::region::Region;
 
-pub enum ChunkLoader
-{
-    Static {
-        loader: StaticLoader,
-    },
 
-    Vanilla {
-        loader: VanillaLoader,
-    }
-}
-
-impl ChunkLoader
-{
-    pub fn new_static_region(
-        level_name: String, 
-        (x_min, z_min): (i32, i32), 
-        (x_max, z_max): (i32, i32)
-    ) -> Result<ChunkLoader, std::io::Error> {
-        Self::new_static(
-            level_name, 
-            (x_min..=x_max)
-                .flat_map(|x| {
-                    (z_min..=z_max).map(move |z| (x, z))
-                }).collect()
-        )
-    }
-
-    pub fn new_static(level_name: String, locations: Vec<(i32, i32)>) -> Result<ChunkLoader, std::io::Error> {
-        let mut out = Self::Static {
-            loader: StaticLoader {
-                level_name: level_name,
-                locations: locations.clone(),
-                loaded_regions: HashMap::new(),
-            }
-        };
-
-        if let ChunkLoader::Static{ ref mut loader } = out {
-            loader.load_chunks(locations)?
-        }
-        Ok(out)
-    }
-    pub fn new_vanilla(level_name: String) -> Self {
-        Self::Vanilla {
-            loader: VanillaLoader {
-                level_name: level_name,
-                loaded_regions: HashMap::new(),
-            }
-        }
-    }
-
-    pub fn get_loader(&mut self) -> Box<&mut dyn Loader> {
-        match self {
-            ChunkLoader::Static { loader } => Box::new(loader),
-            ChunkLoader::Vanilla { loader } => Box::new(loader),
-        }
-    }
-}
 
 /// Used to load a static chunk region
 pub struct StaticLoader {
@@ -78,7 +24,7 @@ impl Loader for StaticLoader {
     
     fn tick_chunks(&mut self) {
         for (_, region) in &mut self.loaded_regions {
-            region.get_loaded_chunks_mut().into_iter().for_each(|(_, chunk)| {
+            region.get_loaded_chunks_mut().into_par_iter().for_each(|(_, chunk)| {
                 chunk.tick_blocks();
                 chunk.tick_entities();
             })
@@ -86,10 +32,47 @@ impl Loader for StaticLoader {
     }
 }
 
+impl StaticLoader {
+    pub fn new_region(
+        level_name: String, 
+        (x_min, z_min): (i32, i32), 
+        (x_max, z_max): (i32, i32)
+    ) -> Result<StaticLoader, std::io::Error> {
+        Self::new(
+            level_name, 
+            (x_min..=x_max)
+                .flat_map(|x| {
+                    (z_min..=z_max).map(move |z| (x, z))
+                }).collect()
+            )
+    }
+
+    pub fn new(level_name: String, locations: Vec<(i32, i32)>) -> Result<StaticLoader, std::io::Error> {
+        let mut out = Self {
+            level_name: level_name,
+            locations: locations.clone(),
+            loaded_regions: HashMap::new(),
+        };
+
+        out.load_chunks(locations)?;
+
+        Ok(out)
+    }
+}
+
 pub struct VanillaLoader {
     level_name: String,
     loaded_regions: HashMap<(i32, i32), Region>,
     //TODO
+}
+
+impl VanillaLoader {
+    pub fn new(level_name: String) -> Self {
+        Self {
+            level_name: level_name,
+            loaded_regions: HashMap::new(),
+        }
+    }
 }
 
 impl Loader for VanillaLoader {
@@ -106,7 +89,7 @@ impl Loader for VanillaLoader {
     }
 }
 
-pub trait Loader {
+pub trait Loader: Send + Sync {
     fn load_chunks(&mut self, locations: Vec<(i32, i32)>) -> Result<(), std::io::Error> {
         let mut region_operations: HashMap<(i32, i32),Vec<(i32, i32)>> = HashMap::new();
         locations.into_iter().for_each(|(x, z)| {

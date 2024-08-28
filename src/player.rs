@@ -1,6 +1,7 @@
 extern crate dashmap;
 
 use dashmap::DashMap;
+use regex::Regex;
 use server_util::ConnectionState;
 use tokio::time::timeout;
 
@@ -16,13 +17,16 @@ use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 use crate::connection::ConnectionError;
 use crate::data_types::text_component::Nbt;
+use crate::data_types::text_component::TextComponentBuilder;
 use crate::data_types::TextComponent;
 use crate::entity::entities::player::EntityPlayer;
 use crate::packet;
 use crate::packet::configuration::CDisconnect_Config;
 use crate::packet::play::CDisconnect_Play;
+use crate::packet::play::CSystemChatMessage;
 use crate::packet::Clientbound;
 use crate::packet::SPacket;
+use crate::permission::Permission;
 use crate::TIMEOUT;
 use crate::connection::Connection;
 use crate::packet::login::CDisconnect_Login;
@@ -46,8 +50,9 @@ pub struct Player {
     uuid: Uuid,
     connection: Mutex<Connection>,
     data: RwLock<Option<EntityPlayer>>,
-    recv_queue: std::sync::Mutex<VecDeque<SPacket>>,
-    permissions: std::sync::RwLock<Box<HashMap<String, bool>>>,
+    recv_queue: Mutex<VecDeque<SPacket>>,
+    send_queue: Mutex<VecDeque<Vec<u8>>>,
+    permissions: std::sync::RwLock<Vec<Regex>>,
 }
 
 impl<'a> Player {
@@ -59,8 +64,9 @@ impl<'a> Player {
             uuid : uuid, 
             connection : Mutex::new(connection),
             data : RwLock::new(None),
-            recv_queue : std::sync::Mutex::new(VecDeque::new()),
-            permissions : std::sync::RwLock::new(Box::new(HashMap::new())),
+            recv_queue : Mutex::new(VecDeque::new()),
+            send_queue : Mutex::new(VecDeque::new()),
+            permissions : std::sync::RwLock::new(Vec::new()),
         }
     }
 
@@ -102,13 +108,18 @@ impl<'a> Player {
     }
 
     pub async fn queue_packet(&self, packet: packet::SPacket) {
-        let mut lock = self.recv_queue.lock().unwrap();
+        let mut lock = self.recv_queue.lock().await;
         lock.push_back(packet);
     }
 
     pub async fn send_packet(&self, packet: impl Clientbound) -> Result<(), ConnectionError> {
         let connection_lock = self.connection.lock().await;
             connection_lock.send_packet(packet).await
+    }
+
+    pub async fn queue_send_packet(&self, packet: impl Clientbound) {
+        let mut lock = self.send_queue.lock().await;
+        lock.push_back(packet.to_be_bytes());
     }
 
     pub async fn get_connection_state(&self) -> ConnectionState {
@@ -151,11 +162,49 @@ impl<'a> Player {
         }
     }
 
-    pub fn has_permission(&self, permission: String) -> Result<bool, PermissionError> {
+    pub fn has_permission(&self, permission: &str) -> bool {
         let perms_lock = self.permissions.read().unwrap();
-        match perms_lock.get(&permission) {
-            Some(val) => Ok(*val),
-            None => Err(PermissionError),
+        for regex in perms_lock.iter() {
+            if regex.is_match(permission) {
+                return true
+            }
+        }
+        false
+    }
+
+    pub fn add_permission(&self, permission: &str) -> Result<(), PermissionError> {
+        let is_valid_permission_regex = Regex::new("^([a-zA-Z]+\\.)*(([a-zA-Z]+)|\\*)").unwrap();
+        if !is_valid_permission_regex.is_match(permission) {
+            return Err(PermissionError)
+        }
+
+        let copy = String::from("^") + permission.clone().replace(".", "\\.").as_str();
+        let re = match Regex::new(copy.as_str()) {
+            Ok(regex) => regex,
+            Err(_) => return Err(PermissionError),
+        };
+        let perms_lock = self.permissions.read().unwrap();
+        for regex in perms_lock.iter() {
+            if regex.as_str() == re.as_str() {
+                return Ok(());
+            }
+        }
+        drop(perms_lock);
+        let mut perms_lock = self.permissions.write().unwrap();
+        perms_lock.push(re);
+        Ok(())
+    }
+
+    pub async fn send_message(&self, message: String) -> bool {
+        match self.get_connection_state().await {
+            
+            ConnectionState::Play => {
+                self.queue_send_packet(CSystemChatMessage::new(
+                    TextComponent::builder().text(message.as_str()).build(), 
+                    false));
+                true
+            },
+            _ => false,
         }
     }
 }

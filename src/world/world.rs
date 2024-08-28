@@ -14,9 +14,10 @@ use crate::packet::play::CUpdateTime;
 use crate::player::Player;
 use crate::{SERVER_REGISTRY, THE_SERVER};
 
+use super::chunk_loader::{self, Loader};
 
 
-use super::chunk_loader::ChunkLoader;
+
 
 pub const TIME_DAY: i64 = 0;
 pub const TIME_NOON: i64 = 6000;
@@ -33,7 +34,7 @@ pub struct World {
     chunk_sections: u8,
     world_age: Mutex<i64>,
     world_time: Mutex<i64>,
-    chunk_loader: ChunkLoader,
+    chunk_loader: Box<dyn Loader>,
     //beds_explode: bool,
     //ticket_regions: RwLock<HashMap<(i32, i32), TicketRegion>>,
     //load_regions: HashMap<(i32, i32), LoadRegion>,
@@ -42,13 +43,13 @@ pub struct World {
     //chunk_cache: ChunkCache,
 }
 
-impl World {
+impl World{
     /// ### NOTE: max_height_times_16 is the world height * 16
     /// For the overworld, this is 24 (for a max height of 384) \
     /// For the nether, this is 16 (for a max height of 256)
     /// 
     /// Use this function when loading the world from a directory
-    pub fn new(level_name: String, dimension_type: Identifier, world_age: i64, world_time: i64, loader: ChunkLoader) -> Self {
+    pub fn new(level_name: String, dimension_type: Identifier, world_age: i64, world_time: i64, loader: Box<dyn Loader>) -> Self {
         let the_world = World {
             players : DashMap::with_capacity(THE_SERVER.get_max_players() as usize),
             //loaded_entities: DashMap::new(),
@@ -73,7 +74,7 @@ impl World {
 
         //TODO: use world spawn location instead of 0, 0
         //the_world.create_chunk_ticket((0, 0), 34 - THE_SERVER.get_properties().get_spawn_chunk_radius() as u8, -1, TicketType::Start);
-
+        
         the_world
     }
 
@@ -86,7 +87,8 @@ impl World {
     }
 
     /// Use this function to create a new world and create the necessary files
-    pub fn create_new_world(level_name: String, dimension_type: Identifier, loader: ChunkLoader) -> Option<Self> {
+    pub fn create_new_world(level_name: String, dimension_type: Identifier, loader: Box<dyn Loader>) -> Option<Self> 
+    {
         //TODO: create world files
         
         let new_world = Self::new(level_name, dimension_type, 0, TIME_NOON.into(), loader);
@@ -106,7 +108,7 @@ impl World {
         self.chunk_sections
     }
 
-    pub fn tick(&mut self) {
+    pub async fn tick(&mut self) {
         let mut world_age_lock = self.world_age.lock().unwrap();
         let mut world_time_lock = self.world_time.lock().unwrap();
         if *world_age_lock % 20 == 0 {
@@ -116,11 +118,8 @@ impl World {
                         let world_age = *world_age_lock;
                         let world_time = *world_time_lock;
                         crate::RUNTIME.spawn(async move {
-                            match arc.send_packet(CUpdateTime::new(world_age, world_time)).await {
-                                Ok(_) => (),
-                                Err(_) => {
-                                    arc.disconnect("Connection lost").await;
-                                },
+                            if arc.send_packet(CUpdateTime::new(world_age, world_time)).await.is_err() {
+                                arc.disconnect("Connection lost").await;
                             }
                         });
                     },
@@ -140,20 +139,19 @@ impl World {
         *world_age_lock += 1;
         *world_time_lock = (*world_time_lock + 1) % 24000;
 
-        drop(world_age_lock);
-        drop(world_time_lock);
-
         if self.get_dimension_info().bed_works() {
             //TODO: Sleeping logic
         }
         
+        drop(world_age_lock);
+        drop(world_time_lock);
 
         //TODO: Scheduled commands
 
         //TODO: Scheduled block ticks
         //TODO: Scheduled fluid ticks
 
-        //TODO: Long time away: Raid Logic (plugin)
+        //TODO: Raid Logic (plugin)
 
         //TODO: (soon) Chunk Load Level, load chunks
         
