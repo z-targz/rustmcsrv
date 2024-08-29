@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::net::SocketAddr;
 use std::sync::{Arc, Weak};
+use std::fmt::Debug;
 
 use log::{debug, trace};
 use server_util::error::ProtocolError;
@@ -74,18 +75,45 @@ impl From<tokio::io::Error> for ConnectionError {
 }
 
 pub struct Connection {
-    read: Mutex<OwnedReadHalf>,
-    write: Mutex<OwnedWriteHalf>,
+    read: OwnedReadHalf,
+    write: OwnedWriteHalf,
     state: ConnectionState,
     compressed: bool,
     addr: SocketAddr,
     owner: Option<Weak<Player>>, //we will never access this from outside this struct, so it doesn't need to be thread-safe
 }
 
+impl Debug for Connection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Connection")
+        .field("state", &self.state)
+        .field("compressed", &self.compressed)
+        .field("addr", &self.addr)
+        .field_with("owner", |f| match &self.owner {
+            Some(weak) => match Weak::upgrade(weak) {
+                Some(player) => {
+                    
+                    f.debug_struct("Player")
+                        .field("connected", player.is_connected())
+                        .field("id", &player.get_id())
+                        .field("name", &player.get_name())
+                        .field("uuid", &player.get_uuid())
+                        .field("data", player.get_data())
+                        .field("permissions", player.get_permissions())
+                        .finish()
+                },
+                None => Ok(()),
+            }
+            None => Ok(()),
+        })
+        .finish()
+    }
+}
+
 impl Connection {
     pub fn new(stream: TcpStream, addr: SocketAddr) -> Self {
         let (read, write) = stream.into_split();
-        Connection {read : Mutex::new(read), write : Mutex::new(write), state : ConnectionState::Handshake, compressed: false, addr : addr, owner : None }
+        Connection {read : read, write : write, state : ConnectionState::Handshake, compressed: false, addr : addr, owner : None }
     }
 
     pub fn set_owner(&mut self, owner: Arc<Player>) {
@@ -116,16 +144,16 @@ impl Connection {
         self.state = state;
     }
 
-    pub async fn get_connection_state(&self) -> ConnectionState {
+    pub fn get_connection_state(&self) -> ConnectionState {
         self.state
     } //lock is dropped
 
     pub async fn drop(&mut self) {
-        let _ = tokio::time::timeout(crate::TIMEOUT * 3, self.write.lock().await.shutdown());
+        let _ = tokio::time::timeout(crate::TIMEOUT * 3, self.write.shutdown());
     }
 
-    pub async fn send_packet(&self, packet: impl Clientbound) -> Result<(), ConnectionError> {
-        match timeout(TIMEOUT, self.write.lock().await.write_all(packet.to_be_bytes().as_slice())).await {
+    pub async fn send_packet(&mut self, packet: impl Clientbound) -> Result<(), ConnectionError> {
+        match timeout(TIMEOUT, self.write.write_all(packet.to_be_bytes().as_slice())).await {
             Ok(result) => match result {
                 Ok(_) => Ok(()),
                 Err(e) => Err(e)?
@@ -134,10 +162,9 @@ impl Connection {
         }
     }
 
-    pub async fn read_next_packet(&self) -> Result<packet::SPacket, ConnectionError> {
+    pub async fn read_next_packet(&mut self) -> Result<packet::SPacket, ConnectionError> {
         let mut buff: [u8; 5] = [0u8; 5];
-        let mut socket_ro = self.read.lock().await;
-        let num_bytes = socket_ro.peek(&mut buff).await;
+        let num_bytes = self.read.peek(&mut buff).await;
         match num_bytes {
             Ok(0) => return Err(ConnectionError::ConnectionClosed)?,
             Err(_) => return Err(ConnectionError::ConnectionClosed)?,
@@ -156,8 +183,7 @@ impl Connection {
         let mut buf = Vec::with_capacity(packet_size_bytes);
         buf.resize(header_size + packet_size_bytes, 0u8);
 
-        let Ok(bytes) = timeout(TIMEOUT, socket_ro.read_exact(buf.as_mut_slice())).await? else {return Err(ConnectionError::ConnectionClosed)?};
-        drop(socket_ro);
+        let Ok(bytes) = timeout(TIMEOUT, self.read.read_exact(buf.as_mut_slice())).await? else {return Err(ConnectionError::ConnectionClosed)?};
         trace!("Read {bytes} bytes.");
         match bytes {
             0=> return Err(ConnectionError::ConnectionClosed)?,

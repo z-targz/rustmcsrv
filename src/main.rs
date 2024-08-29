@@ -7,6 +7,7 @@
 #![feature(async_closure, async_fn_traits)]
 #![feature(specialization)]
 #![feature(trivial_bounds)]
+#![feature(debug_closure_helpers)]
 
 
 #[macro_use]
@@ -60,7 +61,6 @@ mod entity;
 mod nbt;
 mod item;
 mod command;
-mod permission;
 mod event;
 mod plugins;
 

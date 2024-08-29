@@ -2,6 +2,7 @@ use std::error::Error;
 use std::sync::Arc;
 
 use log::debug;
+use log::error;
 use log::info;
 use server_util::ConnectionState;
 use tokio::time::timeout;
@@ -85,7 +86,7 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
                     debug!("Registered player!");              
                 },
                 _ => {
-                    println!("Incorrect packet.");
+                    error!("Incorrect packet.");
                     connection.drop().await;
                     return;
                 }
@@ -102,7 +103,7 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
     debug!("Sending CLoginSuccess...");
     match player_ref.send_packet(CLoginSuccess::new(
         player_ref.get_uuid(), 
-        player_ref.get_name().clone(), 
+        player_ref.get_name().to_string(), 
         get_player_property_array(player_ref.get_uuid()).await,
         false
     )).await {

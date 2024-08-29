@@ -8,6 +8,8 @@ use tokio::time::timeout;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::error::Error;
+use std::fmt::Debug;
+use std::sync::MutexGuard;
 use std::sync::OnceLock;
 //use std::error::Error;
 use std::sync::Arc;
@@ -26,7 +28,7 @@ use crate::packet::play::CDisconnect_Play;
 use crate::packet::play::CSystemChatMessage;
 use crate::packet::Clientbound;
 use crate::packet::SPacket;
-use crate::permission::Permission;
+
 use crate::TIMEOUT;
 use crate::connection::Connection;
 use crate::packet::login::CDisconnect_Login;
@@ -52,10 +54,37 @@ pub struct Player {
     data: RwLock<Option<EntityPlayer>>,
     recv_queue: Mutex<VecDeque<SPacket>>,
     send_queue: Mutex<VecDeque<Vec<u8>>>,
-    permissions: std::sync::RwLock<Vec<Regex>>,
+    permissions: std::sync::RwLock<Permissions>,
+}
+pub type Permissions = Vec<Regex>;
+
+
+impl Debug for Player {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Player")
+            .field("connected", &self.connected)
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("uuid", &self.uuid)
+            .field_with("connection",
+            |f| { 
+                let lock = &self.connection.blocking_lock();
+                f.debug_struct("Connection") 
+                    .field("state", &lock.get_connection_state())
+                    .field("compressed", &lock.is_compressed())
+                    .field("addr", &lock.get_addr())
+                    .finish()
+                }
+            )
+            .field("data", &self.data)
+            .field("recv_queue", &self.recv_queue)
+            .field("send_queue", &self.send_queue)
+            .field("permissions", &self.permissions)
+            .finish()
+    }
 }
 
-impl<'a> Player {
+impl Player {
     pub fn new(name: String, uuid: Uuid, connection: Connection) -> Self {
         Player { 
             connected : Mutex::new(true),
@@ -76,9 +105,8 @@ impl<'a> Player {
         &self.connection
     }
 
-    pub async fn is_connected(&self) -> bool {
-        let lock = self.connected.lock().await;
-        *lock
+    pub fn is_connected(&self) -> &Mutex<bool> {
+        &self.connected
     }
 
     pub(in crate::player) fn set_id(&self, id: i32) -> Result<(), i32> {
@@ -94,7 +122,7 @@ impl<'a> Player {
 
 
 
-    pub fn get_name(&self) -> &String {
+    pub fn get_name(&self) -> &str {
         &self.name
     }
 
@@ -103,7 +131,7 @@ impl<'a> Player {
     }
 
     pub async fn read_next_packet(&self) -> Result<packet::SPacket, ConnectionError> {
-        let connection_lock = self.connection.lock().await;
+        let mut connection_lock = self.connection.lock().await;
             connection_lock.read_next_packet().await
     }
 
@@ -113,7 +141,7 @@ impl<'a> Player {
     }
 
     pub async fn send_packet(&self, packet: impl Clientbound) -> Result<(), ConnectionError> {
-        let connection_lock = self.connection.lock().await;
+        let mut connection_lock = self.connection.lock().await;
             connection_lock.send_packet(packet).await
     }
 
@@ -124,7 +152,7 @@ impl<'a> Player {
 
     pub async fn get_connection_state(&self) -> ConnectionState {
         let connection_lock = self.connection.lock().await;
-            connection_lock.get_connection_state().await
+            connection_lock.get_connection_state()
     }
 
     pub async fn disconnect(&self, reason: &str) {
@@ -178,7 +206,7 @@ impl<'a> Player {
             return Err(PermissionError)
         }
 
-        let copy = String::from("^") + permission.clone().replace(".", "\\.").as_str();
+        let copy = String::from("^") + permission.replace(".", "\\.").as_str();
         let re = match Regex::new(copy.as_str()) {
             Ok(regex) => regex,
             Err(_) => return Err(PermissionError),
@@ -201,11 +229,19 @@ impl<'a> Player {
             ConnectionState::Play => {
                 self.queue_send_packet(CSystemChatMessage::new(
                     TextComponent::builder().text(message.as_str()).build(), 
-                    false));
+                    false)).await;
                 true
             },
             _ => false,
         }
+    }
+    
+    pub fn get_data(&self) -> &RwLock<Option<EntityPlayer>> {
+        &self.data
+    }
+    
+    pub fn get_permissions(&self) -> &std::sync::RwLock<Permissions> {
+        &self.permissions
     }
 }
 

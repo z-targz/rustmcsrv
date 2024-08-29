@@ -85,7 +85,7 @@ impl CommandSender {
             CommandSender::Console => Some("@".to_owned()),
             CommandSender::Player { player } => 
             match player.upgrade() {
-                Some(arc) => Some(arc.get_name().clone()),
+                Some(arc) => Some(arc.get_name().to_string()),
                 None => None,
             }
         }

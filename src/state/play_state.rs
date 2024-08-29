@@ -83,7 +83,7 @@ pub(in crate::state) async fn play_state(player_ref: Arc<Player>) {
 
     player_ref.disconnect_tc(reason).await;
 
-    while player_ref.is_connected().await {
+    while *player_ref.is_connected().lock().await {
         match player_ref.read_next_packet().await {
             Ok(SPacket::SKeepAlive_Play(packet)) => {
                 let _ = tx.send(packet.get_keep_alive_id()).await;
@@ -107,7 +107,7 @@ fn keep_alive(weak: Weak<Player>) -> mpsc::Sender<i64>{
             match weak.upgrade() {
                 Some(player) => {
                     //potential BUG: Client might not immediately send the keep alive packet
-                    let lock = player.get_connection().lock().await;
+                    let mut lock = player.get_connection().lock().await;
                     let time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as i64;
                     match time::timeout(crate::TIMEOUT, lock.send_packet(CKeepAlive_Play::new(time))).await {
                         Ok(_) => {
