@@ -4,9 +4,8 @@ use std::error::Error;
 
 use server_util::ConnectionState;
 
-use super::SPacket;
 
-pub trait Packet: Sized { 
+pub trait Packet: Sized + std::fmt::Debug { 
     fn get_id(&self) -> i32 where Self: Sized;
     fn get_associated_state(&self) -> ConnectionState;
 }

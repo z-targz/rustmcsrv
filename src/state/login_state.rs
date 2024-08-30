@@ -48,86 +48,71 @@ pub(in crate::state) async fn login_state(mut connection: Connection) {
     debug!("Listening for SLoginStart...");
 
     let player_ref: Arc<Player>;
-    match connection.read_next_packet().await {
-        Ok(s_packet) => {
-            match s_packet {
-                SPacket::SLoginStart(packet) => {
-                    let player_name = packet.get_name().clone();
+    if let Ok(s_packet) = connection.read_next_packet().await {
+        if let SPacket::SLoginStart(packet) = s_packet {
+            let player_name = packet.get_name().to_string();
 
-                    let player_uuid;
+            let player_uuid;
 
-                    match get_player_uuid(&player_name).await {
-                        Ok(uuid) => player_uuid = uuid,
-                        Err(_) => {
-                            RUNTIME.spawn(async move {
-                                //TODO: move the timeout into the send packet function
-                                let _ = connection.send_packet(CDisconnect_Login::new("§4Mojang API appears to be down :(".to_string())).await;
-                            });
-                            return;
-                        }
-                    };
-
-                    match THE_SERVER.get_player_by_name(&player_name) {
-                        //TODO: If this returns an error somehow, temp ipban for 30s
-                        Some(p) => p.upgrade().unwrap().disconnect("Logged in from another location.").await,
-                        None => (),
-                    }
-
-                    info!("Player {player_name} ({player_uuid}) logged in from {addr}.");
-
-                    let player = Player::new(player_name, player_uuid, connection);
-                    debug!("Registering player...");    
-                    
-                    player_ref = match THE_SERVER.register_player(player).await {
-                        Ok(arc) => arc,
-                        Err(_) => return,
-                    };
-
-                    debug!("Registered player!");              
-                },
-                _ => {
-                    error!("Incorrect packet.");
-                    connection.drop().await;
-                    return;
-                }
+            if let Ok(uuid) = get_player_uuid(&player_name).await {
+                player_uuid = uuid
+            } else {
+                RUNTIME.spawn(async move {
+                    //TODO: move the timeout into the send packet function
+                    let _ = connection.send_packet(CDisconnect_Login::new("§4Mojang API appears to be down :(".to_string())).await;
+                });
+                return;
             }
-        },
-        Err(_) => {
+
+            if let Some(p) = THE_SERVER.get_player_by_name_async(&player_name).await {
+                p.upgrade().unwrap().disconnect("Logged in from another location.").await;
+            }
+
+            info!("Player {player_name} ({player_uuid}) logged in from {addr}.");
+
+            let player = Player::new(player_name, player_uuid, connection);
+            debug!("Registering player...");    
+            
+            player_ref = match THE_SERVER.register_player(player).await {
+                Ok(arc) => arc,
+                Err(_) => return,
+            };
+
+            debug!("Registered player!");
+        } else {
+            error!("Incorrect packet.");
             connection.drop().await;
             return;
         }
+    } else {
+        connection.drop().await;
+        return;
     }
     //TODO: Everything in between
 
 
     debug!("Sending CLoginSuccess...");
-    match player_ref.send_packet(CLoginSuccess::new(
+    if player_ref.send_packet(CLoginSuccess::new(
         player_ref.get_uuid(), 
         player_ref.get_name().to_string(), 
         get_player_property_array(player_ref.get_uuid()).await,
         false
-    )).await {
-        Ok(_) => (),
-        Err(_) => {
-            player_ref.disconnect("Connection closed.").await;
-            return;
-        }
+    )).await.is_err() {
+        player_ref.disconnect("Connection closed.").await;
+        return;
     }
     debug!("Sent CLoginSuccess!");
     debug!("Awaiting SLoginAcknowledged...");
-    match player_ref.read_next_packet().await {
-        Ok(s_packet) => match s_packet {
-            SPacket::SLoginAcknowledged(_) => (),
-            _ => {
-                player_ref.disconnect("Incorrect packet.").await;
-                return;
-            }
-        },
-        Err(_) => {
-            player_ref.disconnect("Invalid packet.").await;
+    if let Ok(s_packet) = player_ref.read_next_packet().await {
+        if !matches!(s_packet, SPacket::SLoginAcknowledged(_)) {
+            player_ref.disconnect("Incorrect packet.").await;
             return;
         }
-    };
+    } else {
+        player_ref.disconnect("Invalid packet.").await;
+        return;
+    }
+    
     debug!("Received SLoginAcknowledged!");
     debug!("Switching to configuration state...");
     configuration_state(player_ref).await;
@@ -150,45 +135,39 @@ struct APIProfileResponse {
 }
 
 async fn get_player_property_array(player_uuid: Uuid) -> PropertyArray {
-    match timeout(TIMEOUT, reqwest::get(format!("https://sessionserver.mojang.com/session/minecraft/profile/{}", player_uuid.to_string()))).await {
-        Ok(result) => match result {
-            Ok(response) => match response.text().await {
-                Ok(text) => match serde_json::from_str::<APISessionResponse>(text.as_str()) {
-                    Ok(api_response) => {
-                        return api_response.properties;
-                    },
-                    Err(_) => ()
-                }
-                Err(_) => (),
-            },
-            Err(_) => ()
-        },
-        Err(_) => ()
+    if let Ok(Ok(response)) = timeout(
+        TIMEOUT, 
+        reqwest::get(format!(
+            "https://sessionserver.mojang.com/session/minecraft/profile/{}", 
+            player_uuid.to_string()
+        ))
+    ).await {
+        if let Ok(text) = response.text().await {
+            if let Ok(api_response) = serde_json::from_str::<APISessionResponse>(text.as_str()) {
+                return api_response.properties;
+            }
+        }
     }
-    vec![] //default value
+    vec![]
 }
 
 async fn get_player_uuid(player_name: &String) -> Result<Uuid, Box<dyn Error + Send + Sync>> {
     if THE_SERVER.get_properties().is_online_mode() {
         match reqwest::get(format!("https://api.mojang.com/users/profiles/minecraft/{}", player_name)).await {
-            Ok(response) => match response.text().await {
-                Ok(text) => match serde_json::from_str::<APIProfileResponse>(text.as_str()) {
-                    Ok(api_response) => {
-                        match Uuid::parse_str(api_response.id.as_str()) {
-                            Ok(uuid) => Ok(uuid),
-                            Err(_) => Err("Malformed API response")?
+            Ok(response) => {
+                if let Ok(text) = response.text().await {
+                    if let Ok(api_response) = serde_json::from_str::<APIProfileResponse>(text.as_str()) {
+                        if let Ok(uuid) = Uuid::parse_str(api_response.id.as_str()) {
+                            return Ok(uuid)
                         }
-                    },
-                    Err(_) => {
-                        return Err("Malformed API response")?
                     }
                 }
-                Err(_) => Err("Malformed API response")?,
             },
             Err(e) => Err(e)?
         }
     } else {
         //Minecraft uses UUID v3
-        Ok(uuid::Builder::from_md5_bytes(md5::compute(format!("OfflinePlayer:{player_name}").as_bytes()).0).into_uuid())
+        return Ok(uuid::Builder::from_md5_bytes(md5::compute(format!("OfflinePlayer:{player_name}").as_bytes()).0).into_uuid())
     }
+    Err("Malformed API response")?
 }

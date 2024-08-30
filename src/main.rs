@@ -63,6 +63,7 @@ mod item;
 mod command;
 mod event;
 mod plugins;
+mod block;
 
 //const MTU: usize = 1500;
 
@@ -97,21 +98,27 @@ pub static REGISTRIES_JSON: LazyLock<String> = LazyLock::new(|| {
     include_str!("../generated/reports/registries.json").to_owned()
 });
 
-pub static SERVER_REGISTRY: LazyLock<HashMap<String, HashMap<String, RegistryEntry>>> = LazyLock::new(|| {
+pub type Registry = HashMap<String, HashMap<String, RegistryEntry>>;
+
+pub static SERVER_REGISTRY: LazyLock<Registry> = LazyLock::new(|| {
     registry::get_registry().unwrap()
 });
 
-pub static REGISTRY_NBT: LazyLock<HashMap<String, Vec<NBTifiedRegistryEntry>>> = LazyLock::new(|| {
-    REGISTRIES.iter().map(|registry_name| {
-        (
-            registry_name.to_string(), 
-            data_types::registry::get_registry_nbt(
-                SERVER_REGISTRY.get(*registry_name).unwrap()
-                    .iter()
-                    .map(|(_, v)| v.clone())
-                    .collect()).unwrap())
-    }).collect()
-});
+pub static REGISTRY_NBT: LazyLock<HashMap<String, Vec<NBTifiedRegistryEntry>>> = 
+    LazyLock::new(|| {
+        REGISTRIES.iter().map(|registry_name| {
+            (
+                registry_name.to_string(), 
+                data_types::registry::get_registry_nbt(
+                    SERVER_REGISTRY.get(*registry_name)
+                        .unwrap()
+                        .iter()
+                        .map(|(_, v)| v.clone())
+                        .collect()
+                ).unwrap()
+            )
+        }).collect()
+    });
 
 pub static REGISTRY_TAGS: LazyLock<Vec<TagRegistry>> = LazyLock::new(|| {
     TAGS.iter().map(|tags| TagRegistry::new(tags)).collect()
@@ -122,36 +129,46 @@ pub static THE_SERVER: LazyLock<Server> = LazyLock::new(|| {
 });
 
 pub static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
-    tokio::runtime::Builder::new_multi_thread().enable_time().enable_io().build().unwrap()
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_time()
+        .enable_io()
+        .build()
+        .unwrap()
 });
 
 
 pub static CONSOLE: OnceLock<Console> = OnceLock::new();
 
-pub static COMMANDS: LazyLock<Vec<Command>> = LazyLock::new(|| {
-    Vec::new()
-});
 
 
-pub(crate) static STOP_SIGNAL: OnceLock<broadcast::Sender<bool>> = OnceLock::new();
 
-pub static COMMAND_MAP: LazyLock<tokio::sync::Mutex<MaybeUninit<CommandMap>>> = 
-    LazyLock::new(|| tokio::sync::Mutex::new(MaybeUninit::uninit()));
+pub(crate) static STOP_SIGNAL: OnceLock<broadcast::Sender<bool>> = 
+    OnceLock::new();
+
+pub static COMMAND_MAP: LazyLock<tokio::sync::Mutex<Option<CommandMap>>> = 
+    LazyLock::new(|| tokio::sync::Mutex::new(None));
 
 #[tokio::main]
 async fn main() {
     info!("Hello, World!");
     debug!("Hello, World!");
 
-    let (logger_tx, console_rx) = mpsc::channel::<String>(16);
+    let (logger_tx, console_rx) = 
+        mpsc::channel::<String>(16);
 
-    let (stop_signal_tx, stop_signal_rx) = broadcast::channel::<bool>(1);
+    let (stop_signal_tx, stop_signal_rx) = 
+        broadcast::channel::<bool>(1);
 
     let _ = STOP_SIGNAL.get_or_init(move || {
         stop_signal_tx.clone()
     });
 
-    let _ = CONSOLE.get_or_init(|| Console::new(logger_tx.clone()).unwrap());
+    let _ = CONSOLE.get_or_init(|| { 
+        Console::new(
+            logger_tx.clone(), 
+            STOP_SIGNAL.get().unwrap().subscribe()
+        ).unwrap()
+    });
 
     RUNTIME.spawn(connection_listener());
 
@@ -169,14 +186,19 @@ async fn enable() {
     THE_SERVER.get_event_manager().register_event_handler::<EventOnEnable>(
         EventHandler::new(EventPriority::Normal, test_on_enable)
     ).await;
-    let mut map_lock = COMMAND_MAP.lock().await;
-    map_lock.write(command_map_builder.build());
-    event::listen::<EventOnEnable>(THE_SERVER.get_event_manager(), &EventOnEnable::new()).await;
+    *COMMAND_MAP.lock().await = Some(command_map_builder.build());
+    event::listen::<EventOnEnable>(
+        THE_SERVER.get_event_manager(), 
+        &mut EventOnEnable::new()
+    ).await;
 }
 
 async fn scheduler(mut stop: broadcast::Receiver<bool>) {
-    let mut interval = tokio::time::interval(Duration::from_millis(50));
+    let mut interval = 
+        tokio::time::interval(Duration::from_millis(50));
+    
     enable().await;
+    
     loop {
         match stop.try_recv() {
             Ok(signal) => if signal == true {
@@ -187,10 +209,11 @@ async fn scheduler(mut stop: broadcast::Receiver<bool>) {
                 disable().await;
                 enable().await;
             },
-            Err(err) => match err {
-                broadcast::error::TryRecvError::Empty => (),
-                _ => break
-            },
+            Err(err) => { 
+                if !matches!(err, broadcast::error::TryRecvError::Empty) { 
+                    break 
+                } 
+            }
         }
 
         THE_SERVER.tick_worlds().await;
@@ -201,7 +224,7 @@ async fn scheduler(mut stop: broadcast::Receiver<bool>) {
     THE_SERVER.save_worlds().await;
 }
 
-fn test_on_enable(e: EventOnEnable) -> EventResult {
+fn test_on_enable(e: &mut EventOnEnable) -> EventResult {
     log::log!(log::Level::Info, "OnEnable triggerd");
     EventResult::Default
 }
@@ -209,9 +232,12 @@ fn test_on_enable(e: EventOnEnable) -> EventResult {
 
 
 async fn disable() {
-    event::listen::<EventOnDisable>(THE_SERVER.get_event_manager(), &EventOnDisable::new()).await;
-    let mut map_lock = COMMAND_MAP.lock().await;
-    unsafe { map_lock.assume_init_drop(); };
+    event::listen::<EventOnDisable>(
+        THE_SERVER.get_event_manager(), 
+        &mut EventOnDisable::new()
+    ).await;
+
+    *COMMAND_MAP.lock().await = None;
 
     //TODO: Save Worlds
 }
@@ -239,23 +265,26 @@ async fn console(mut rx: mpsc::Receiver<String>) {
 
 
 async fn connection_listener() {
-    let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], THE_SERVER.get_properties().get_server_port()))).await.unwrap_or_else(|e| {
-        eprintln!("Error: {e}");
-        std::process::exit(1);
-    });
+    let listener = 
+        TcpListener::bind(SocketAddr::from(
+            (
+                [127, 0, 0, 1], 
+                THE_SERVER.get_properties().get_server_port()
+            )
+        )).await.unwrap_or_else(|e| {
+            eprintln!("Error: {e}");
+            std::process::exit(1);
+        });
     loop {
-        let stream = listener.accept().await;
-        match stream {
-            Ok(stream) => {
-                let tcpstream = stream.0;
-                let addr = stream.1;
-                let _ = tcpstream.set_nodelay(true);
-                let connection = Connection::new(tcpstream, addr);
-                let future = handshake_state(connection);
-                RUNTIME.spawn(future);
-            },
-            Err(_) => return
-        }
+        if let Ok((stream, addr)) = 
+            listener.accept().await {
+                let _ = stream.set_nodelay(true);
+                RUNTIME.spawn(
+                    handshake_state(Connection::new(stream, addr))
+                );
+            } else {
+                return
+            }
     }
 }
 

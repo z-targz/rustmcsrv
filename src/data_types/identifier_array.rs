@@ -1,6 +1,7 @@
 use super::{Identifier, ToProtocol, VarInt};
 
 
+#[derive(Debug, Clone)]
 pub struct IdentifierArray {
     data: Vec<Identifier>,
 }

@@ -4,10 +4,8 @@ extern crate proc_macro;
 extern crate seq_macro;
 
 
-use std::env;
 use std::fs::File;
 use std::io::Read;
-use std::ops::Add;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::LazyLock;
@@ -32,15 +30,12 @@ use syn::DataStruct;
 use syn::DeriveInput;
 use syn::Fields;
 use syn::parse_macro_input;
-use syn::FieldsNamed;
-use syn::Ident;
 use syn::LitStr;
 
 use server_util::ConnectionState;
 
 use base64::prelude::*;
 
-use lazy_static::lazy_static;
 
 mod registry;
 mod entity;
@@ -64,8 +59,6 @@ static PLAY_PACKETS: LazyLock<Mutex<HashMap<i32, String>>> = LazyLock::new(|| {
     Mutex::new(HashMap::new())
 });
 
-static ENTITIES: LazyLock<Mutex<HashMap<String,String>>> = 
-    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 static REGISTRY: LazyLock<Mutex<HashMap<String, Mapping>>> = LazyLock::new(|| {
     Mutex::new(registry::read_registry_json())
@@ -228,7 +221,7 @@ pub fn derive_tickable_entity(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
-pub fn entity(attrs: TokenStream, input: TokenStream) -> TokenStream {
+pub fn entity(_attrs: TokenStream, input: TokenStream) -> TokenStream {
     input
 }
 
@@ -926,7 +919,7 @@ pub fn create_entity_enum(_: TokenStream) -> TokenStream {
     let mut imports = String::new();
     let mut getters = String::new();
 
-    let result = files.into_iter()
+    let _ = files.into_iter()
         .map(|result| {
             match result {
                 Ok(dir_entry) => {
@@ -947,9 +940,9 @@ pub fn create_entity_enum(_: TokenStream) -> TokenStream {
                     
                     struct FileVisitor {
                         pub tag_names: Vec<String>,
-                    };
+                    }
                     impl FileVisitor {
-                        pub fn new(file_path: PathBuf) -> Self {
+                        pub fn new(_: PathBuf) -> Self {
                             Self { tag_names: Vec::new() }
                         }
                     }

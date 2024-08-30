@@ -27,21 +27,15 @@ pub(in crate::state) async fn status_state(mut connection: Connection) {
         Listen for SStatusRequest
     */
     debug!("{addr} > Listening for SStatusRequest...");
-    match connection.read_next_packet().await {
-        Ok(s_packet) => {
-            match s_packet {
-                SPacket::SStatusRequest(_) => (),
-                _ => {
-                    debug!("{addr} > Incorrect packet...");
-                    connection.drop().await;
-                    return;
-                }
-            }
-        },
-        Err(_) => {
+    if let Ok(s_packet) =  connection.read_next_packet().await {
+        if !matches!(s_packet, SPacket::SStatusRequest(_)) {
+            debug!("{addr} > Incorrect packet...");
             connection.drop().await;
             return;
         }
+    } else {
+        connection.drop().await;
+        return;
     }
     debug!("{addr} > Received SStatusRequest!");
 
@@ -49,13 +43,10 @@ pub(in crate::state) async fn status_state(mut connection: Connection) {
         Send CStatusResponse
      */
     debug!("{addr} > Sending CStatusResponse...");
-    match connection.send_packet(generate_status_response()).await {
-        Ok(_) => (),
-        Err(_) => {
-            println!("{addr} > Error sending packet!");
-            connection.drop().await;
-            return;
-        }
+    if connection.send_packet(generate_status_response().await).await.is_err() {
+        println!("{addr} > Error sending packet!");
+        connection.drop().await;
+        return;
     };
     debug!("{addr} > Sent CStatusResponse.");
 
@@ -63,37 +54,27 @@ pub(in crate::state) async fn status_state(mut connection: Connection) {
         Listen for SPingRequest_Status
      */
     let payload: i64;
-    match connection.read_next_packet().await {
-        Ok(s_packet) => {
-            match s_packet {
-                SPacket::SPingRequest_Status(s_ping_request_status) => {
-                    payload = s_ping_request_status.get_payload();
-                },
-                _ => {
-                    //Incorrect packet
-                    debug!("{addr} > Incorrect packet");
-                    connection.drop().await;
-                    return;
-                }
-            }
-        },
-        Err(_) => {
+    if let Ok(s_packet) = connection.read_next_packet().await {
+        if let SPacket::SPingRequest_Status(s_ping_request_status) = s_packet {
+            payload = s_ping_request_status.get_payload();
+        } else {
+            debug!("{addr} > Incorrect packet");
             connection.drop().await;
             return;
         }
+    } else {
+        connection.drop().await;
+        return;
     }
     debug!("{addr} > Received SPingRequest_Status!");
 
     /*
         Send SPingResponse_Status
     */
-    match connection.send_packet(CPingResponse_Status::new(payload)).await {
-        Ok(_) => (),
-        Err(_) => {
-            debug!("{addr} > Unable to send packet SPingResponse_Status");
-            connection.drop().await;
-            return;
-        }
+    if connection.send_packet(CPingResponse_Status::new(payload)).await.is_err() {
+        debug!("{addr} > Unable to send packet SPingResponse_Status");
+        connection.drop().await;
+        return;
     };
 
     connection.drop().await;
@@ -101,10 +82,10 @@ pub(in crate::state) async fn status_state(mut connection: Connection) {
     return;
 }
 
-fn generate_status_response() -> CStatusResponse {
-    let player_count = THE_SERVER.get_players_iter().count();
+async fn generate_status_response() -> CStatusResponse {
+    let player_count = THE_SERVER.get_num_players_async().await;
     let max_players = THE_SERVER.get_max_players();
-    let motd = THE_SERVER.get_motd().clone();
+    let motd = THE_SERVER.get_motd().to_string();
 
     let mut result = String::new();
     let data = std::fs::read(Path::new("server-icon.png"));

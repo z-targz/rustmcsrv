@@ -10,7 +10,7 @@ use server_util::ConnectionState;
 use server_macros::CPacket;
 use server_macros::SPacket;
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Login)]
 #[id(0)]
 #[allow(non_camel_case_types)]
@@ -18,7 +18,7 @@ pub struct CDisconnect_Login {
     reason: String,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Login)]
 #[id(1)]
 pub struct CEncryptionRequest {
@@ -27,7 +27,7 @@ pub struct CEncryptionRequest {
     verify_token: PrefixedByteArray,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Login)]
 #[id(2)]
 pub struct CLoginSuccess {
@@ -37,14 +37,14 @@ pub struct CLoginSuccess {
     strict_error_handling: bool,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Login)]
 #[id(3)]
 pub struct CSetCompression {
     threshold: VarInt,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Login)]
 #[id(4)]
 #[allow(non_camel_case_types)]
@@ -54,7 +54,7 @@ pub struct CPluginRequest_Login {
     data: InferredByteArray,
 }
 
-#[derive(Debug)]
+#[derive(Debug,)]
 #[derive(SPacket)]
 #[state(Login)]
 #[id(0)]

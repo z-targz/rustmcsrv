@@ -10,14 +10,14 @@ use server_macros::CPacket;
 use server_macros::SPacket;
 
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Status)]
 #[id(0)]
 pub struct CStatusResponse {
     json_response: JSONString,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Status)]
 #[id(1)]
 #[allow(non_camel_case_types)]

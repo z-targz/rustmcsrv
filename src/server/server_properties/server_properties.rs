@@ -45,7 +45,7 @@ impl ServerProperties {
         self.server_port
     }
 
-    pub fn get_motd(&self) -> &String {
+    pub fn get_motd(&self) -> &str {
         &self.motd
     }
 

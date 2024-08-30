@@ -12,11 +12,11 @@ pub struct Angle {
     degrees: f64,
 }
 
-pub fn mod_f64(a: f64, b: f64) -> f64 {
+fn mod_f64(a: f64, b: f64) -> f64 {
     ((a % b) + b) % b
 }
 
-pub fn mod_i32(a: i32, b: i32) -> i32 {
+fn mod_i32(a: i32, b: i32) -> i32 {
     ((a % b) + b) % b
 }
 

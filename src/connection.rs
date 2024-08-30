@@ -3,6 +3,7 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Weak};
 use std::fmt::Debug;
 
+use itertools::Itertools;
 use log::{debug, trace};
 use server_util::error::ProtocolError;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -10,7 +11,6 @@ use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::net::TcpStream;
 
 use server_util::ConnectionState;
-use tokio::sync::Mutex;
 use tokio::time::error::Elapsed;
 use tokio::time::timeout;
 
@@ -80,7 +80,9 @@ pub struct Connection {
     state: ConnectionState,
     compressed: bool,
     addr: SocketAddr,
-    owner: Option<Weak<Player>>, //we will never access this from outside this struct, so it doesn't need to be thread-safe
+    owner: Option<Weak<Player>>, 
+    hostname: Option<String>,
+    port: Option<u16>,
 }
 
 impl Debug for Connection {
@@ -113,7 +115,16 @@ impl Debug for Connection {
 impl Connection {
     pub fn new(stream: TcpStream, addr: SocketAddr) -> Self {
         let (read, write) = stream.into_split();
-        Connection {read : read, write : write, state : ConnectionState::Handshake, compressed: false, addr : addr, owner : None }
+        Self {
+            read: read, 
+            write: write, 
+            state: ConnectionState::Handshake, 
+            compressed: false, 
+            addr: addr, 
+            owner: None,
+            hostname: None,
+            port: None,
+        }
     }
 
     pub fn set_owner(&mut self, owner: Arc<Player>) {
@@ -146,20 +157,46 @@ impl Connection {
 
     pub fn get_connection_state(&self) -> ConnectionState {
         self.state
-    } //lock is dropped
+    }
 
     pub async fn drop(&mut self) {
         let _ = tokio::time::timeout(crate::TIMEOUT * 3, self.write.shutdown());
     }
 
     pub async fn send_packet(&mut self, packet: impl Clientbound) -> Result<(), ConnectionError> {
+
+        
         match timeout(TIMEOUT, self.write.write_all(packet.to_be_bytes().as_slice())).await {
             Ok(result) => match result {
                 Ok(_) => Ok(()),
-                Err(e) => Err(e)?
+                Err(e) => {
+                    
+                    self.err_sending_packet_drop(&packet).await;
+                    Err(e)?
+                }
             },
-            Err(e) => Err(e)?
+            Err(e) => {
+                self.err_sending_packet_drop(&packet).await;
+                Err(e)?
+            }
         }
+    }
+
+    async fn err_sending_packet_drop(&mut self, packet: &(impl Clientbound + std::fmt::Debug)) {
+        match &self.owner {
+            Some(owner) => {
+
+            },
+            None => {
+                let packet_debug = format!("{:?}", packet);
+                log::info!(
+                    "{} > Error Sending Packet {}", 
+                    self.addr, 
+                    packet_debug.get(..packet_debug.find(|c: char| !c.is_ascii_alphabetic()).unwrap_or(packet_debug.len())).unwrap(),
+                )
+            },
+        }
+        self.drop().await;
     }
 
     pub async fn read_next_packet(&mut self) -> Result<packet::SPacket, ConnectionError> {
@@ -183,7 +220,11 @@ impl Connection {
         let mut buf = Vec::with_capacity(packet_size_bytes);
         buf.resize(header_size + packet_size_bytes, 0u8);
 
-        let Ok(bytes) = timeout(TIMEOUT, self.read.read_exact(buf.as_mut_slice())).await? else {return Err(ConnectionError::ConnectionClosed)?};
+        let Ok(bytes) = timeout(TIMEOUT, self.read.read_exact(buf.as_mut_slice())).await? 
+            else {
+                return Err(ConnectionError::ConnectionClosed)?
+            };
+            
         trace!("Read {bytes} bytes.");
         match bytes {
             0=> return Err(ConnectionError::ConnectionClosed)?,
@@ -200,6 +241,22 @@ impl Connection {
         trace!("Creating packet...");
         Ok(packet::create_packet(packet_id, self.state, &mut iter)?)
         //drop(lock)
+    }
+    
+    pub fn get_port(&self) -> Option<u16> {
+        self.port
+    }
+    
+    pub fn set_port(&mut self, port: u16) {
+        self.port = Some(port);
+    }
+    
+    pub fn get_hostname(&self) -> Option<&String> {
+        self.hostname.as_ref()
+    }
+    
+    pub fn set_hostname(&mut self, hostname: &str) {
+        self.hostname = Some(hostname.to_string());
     }
 
 }

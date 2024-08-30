@@ -141,7 +141,6 @@ pub(in super) fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
     //borrow variable-sized types
     fn borrow(str: &str) -> &str {
         match str {
-            "String" => "&",
             "JSONString" => "&",
             "TextComponent<Json>" => "&",
             "TextComponent<Nbt>" => "&",
@@ -172,7 +171,10 @@ pub(in super) fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
             getters += format!("pub fn get_{field_name}(&self) -> &{field_type} {{ &self.{field_name} }}").as_str();
 
             let_reads += format!("let {field_name}: {field_type} = Vec::from_protocol_iter(iter)?;").as_str();
-        
+        } else if field_type == "String" {
+            getters += format!("pub fn get_{field_name}(&self) -> &str {{ &self.{field_name} }}").as_str();
+
+            let_reads += format!("let {field_name}: String = String::from_protocol_iter(iter)?;").as_str();
         } else {
             let b = borrow(field_type.as_str());
             getters += format!("pub fn get_{field_name}(&self) -> {b}{field_type} {{ {b}self.{field_name} }}").as_str();

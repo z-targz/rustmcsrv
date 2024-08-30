@@ -1,5 +1,6 @@
 use super::{ToProtocol, VarInt};
 
+#[derive(Debug, Clone)]
 pub struct Statistic {
     category_id: VarInt,
     statistic_id: VarInt,

@@ -1,6 +1,6 @@
 use super::{tags::tags::parse_directory, Identifier, ToProtocol, VarInt};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TagRegistry {
     registry: Identifier,
     tags: Vec<Tag>,
@@ -35,7 +35,7 @@ impl ToProtocol for Vec<TagRegistry> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Tag {
     tag_name: Identifier,
     entries: Vec<VarInt>,

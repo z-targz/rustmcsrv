@@ -1,11 +1,11 @@
 
-use std::{collections::HashMap, fmt::Debug, fs::File, io::Read, path::{Path, PathBuf}};
+use std::{fmt::Debug, fs::File, io::Read, path::{Path, PathBuf}};
 
 
 
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
-use syn::{visit::Visit, AttrStyle, DeriveInput};
+use quote::quote;
+use syn::visit::Visit;
 
 
 /*
@@ -95,9 +95,9 @@ pub fn create_entity_macros(_: TokenStream) -> TokenStream {
                     
                     struct FileVisitor {
                         pub tag_names: Vec<String>,
-                    };
+                    }
                     impl FileVisitor {
-                        pub fn new(file_path: PathBuf) -> Self {
+                        pub fn new(_file_path: PathBuf) -> Self {
                             Self { tag_names: Vec::new() }
                         }
                     }

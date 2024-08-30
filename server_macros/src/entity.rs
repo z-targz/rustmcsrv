@@ -1,22 +1,4 @@
 use std::fmt::Debug;
-
-use quote::ToTokens;
-use syn::{Attribute, Data, DataStruct, Fields, FieldsNamed, Ident};
-
-pub (in super) fn register_entity_tag(ast: syn::DeriveInput, entity_tag_name: &str, module_path: &str) {
-    let mut lock = super::ENTITIES.lock().unwrap();
-    
-    if !lock.contains_key(&entity_tag_name.to_string()) {
-        let _ = lock.insert(entity_tag_name.to_string(), module_path.to_string());
-    }
-}
-
-pub (in super) fn impl_entity(ast: &syn::DeriveInput) -> &Ident {
-    let attrs = &ast.attrs;
-
-    &ast.ident
-}
-
 pub (in super) enum EntityMacroError {
     IOError(std::io::Error),
     SynError(syn::Error),

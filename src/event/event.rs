@@ -38,7 +38,7 @@ impl EventManager {
 }
 
 
-pub async fn listen<E: TraitEvent + Clone + 'static>(manager: &EventManager, e: &E) -> EventResult {
+pub async fn listen<E: TraitEvent + Clone + 'static>(manager: &EventManager, e: &mut E) -> EventResult {
     match manager.get_event_map().read().await.get(&TypeId::of::<E>()) {
         Some(ref_box) => {
             let list = unsafe { &*(ref_box as *const dyn Any as *const Box<HandlerList<E>>) };
@@ -47,9 +47,9 @@ pub async fn listen<E: TraitEvent + Clone + 'static>(manager: &EventManager, e: 
             fn handle<E: TraitEvent + Clone>(
                 handler: &EventHandler<E>, 
                 result: &mut EventResult, 
-                e: &E
+                e: &mut E
             ) {
-                match (handler.func)(e.clone()) {
+                match (handler.func)(e) {
                     EventResult::Deny => *result = EventResult::Deny,
                     EventResult::Default => (),
                     EventResult::Allow => *result = EventResult::Allow,
@@ -57,22 +57,22 @@ pub async fn listen<E: TraitEvent + Clone + 'static>(manager: &EventManager, e: 
             }
             
             for handler in list.lowest.iter() {
-                handle(handler, &mut result, &e);
+                handle(handler, &mut result, e);
             }
             for handler in list.low.iter() {
-                handle(handler, &mut result, &e);
+                handle(handler, &mut result, e);
             }
             for handler in list.normal.iter() {
-                handle(handler, &mut result, &e);
+                handle(handler, &mut result, e);
             }
             for handler in list.high.iter() {
-                handle(handler, &mut result, &e);
+                handle(handler, &mut result, e);
             }
             for handler in list.highest.iter() {
-                handle(handler, &mut result, &e);
+                handle(handler, &mut result, e);
             }                
             for handler in list.monitor.iter() {
-                handle(handler, &mut result, &e);
+                handle(handler, &mut result, e);
             }
             result
         },
@@ -157,12 +157,12 @@ impl<E: TraitEvent> HandlerList<E>
 #[derive(PartialEq, Eq)]
 pub struct EventHandler<E: TraitEvent + ?Sized> {
     priority: EventPriority,
-    func: fn(E) -> EventResult,
+    func: fn(&mut E) -> EventResult,
 }
 
 
 impl<E: TraitEvent> EventHandler<E> {
-    pub fn new(priority: EventPriority, func: fn(E) -> EventResult) -> Self {
+    pub fn new(priority: EventPriority, func: fn(&mut E) -> EventResult) -> Self {
         Self { 
             priority: priority, 
             func: func,

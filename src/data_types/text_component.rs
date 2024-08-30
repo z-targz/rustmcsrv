@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use super::{ToProtocol, NBT};
 
 
-trait TextComponentType {}
+trait TextComponentType: Default + Debug + Clone {}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Nbt;
@@ -20,7 +20,7 @@ pub struct Json;
 
 impl TextComponentType for Json {}
 
-#[allow(private_bounds)]
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 //TODO: Implement serverbound `nbt` content
 pub struct TextComponent<T> 
@@ -85,8 +85,8 @@ impl ClickEvent {
     }
 }
 
-//TODO: Replace this with an enum
-#[allow(private_bounds)]
+
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct HoverEvent<T> 
     where T: TextComponentType
@@ -103,7 +103,6 @@ pub enum HoverEventAction {
     ShowEntity,
 }
 
-#[allow(private_bounds)]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum Contents<T> 
@@ -171,7 +170,7 @@ impl<T> HoverEvent<T>
 
 #[allow(private_bounds)]
 impl<T> TextComponent<T> 
-    where T: Debug + Clone + Default + TextComponentType
+    where T: TextComponentType
 {
     fn new(
         default_formatting: Formatting,
@@ -349,7 +348,7 @@ pub struct NoData;
 #[allow(private_bounds)]
 #[derive(Default, Debug)]
 pub struct TextComponentBuilder<'a, S, T> 
-    where T: Debug + Default + TextComponentType + Clone,
+    where T: TextComponentType,
 {
     default_formatting: Formatting,
     text: Option<S>,
@@ -364,7 +363,7 @@ pub struct TextComponentBuilder<'a, S, T>
 
 #[allow(private_bounds)]
 impl<'a, T> TextComponentBuilder<'a, NoData, T> 
-    where T: Debug + Default + TextComponentType + Clone
+    where T: TextComponentType
 {
     fn new() -> TextComponentBuilder<'a, NoData, T> {
         TextComponentBuilder {
@@ -412,7 +411,7 @@ impl<'a, T> TextComponentBuilder<'a, NoData, T>
 
 #[allow(private_bounds)]
 impl<'a, T> TextComponentBuilder<'a, &str, T> 
-    where T: Debug + Default + TextComponentType + Clone
+    where T: TextComponentType
 {
     pub fn formatting(mut self, formatting: Formatting) -> Self {
         self.formatting = Some(formatting);

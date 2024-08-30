@@ -13,12 +13,13 @@ use uuid::Uuid;
 use server_macros::CPacket;
 use server_macros::SPacket;
 
-#[derive(CPacket)]
+
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x00)]
 pub struct CBundleDelimiter {}
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x01)]
 pub struct CSpawnEntity {
@@ -37,7 +38,7 @@ pub struct CSpawnEntity {
     velocity_z: i16,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x02)]
 pub struct CSpawnExperienceOrb {
@@ -48,7 +49,7 @@ pub struct CSpawnExperienceOrb {
     count: i16,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x03)]
 /// Animation ID:\
@@ -62,21 +63,21 @@ pub struct CEntityAnimation {
     animation: u8,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x04)]
 pub struct CAwardStatistics {
     statistics: StatisticArray,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x05)]
 pub struct CAcknowledgeBlockChange {
     sequence_id: VarInt,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x06)]
 pub struct CSetBlockDestroyStage {
@@ -85,7 +86,7 @@ pub struct CSetBlockDestroyStage {
     destroy_stage: i8,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x07)]
 pub struct CBlockEntityData {
@@ -94,7 +95,7 @@ pub struct CBlockEntityData {
     nbt_data: NBT,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x08)]
 /// The packet uses a block ID from minecraft:block registry instead of a block state.\
@@ -107,7 +108,7 @@ pub struct CBlockAction {
     block_type: VarInt,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x09)]
 /// ## Block Update
@@ -119,14 +120,14 @@ pub struct CBlockUpdate {
     block_id: VarInt,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x12)]
 pub struct CCloseContainer {
     window_id: u8,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x1d)]
 #[allow(non_camel_case_types)]
@@ -135,7 +136,7 @@ pub struct CDisconnect_Play {
     reason: TextComponent<Nbt>,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x25)]
 pub struct CInitializeWorldBorder {
@@ -149,7 +150,7 @@ pub struct CInitializeWorldBorder {
     warning_time: VarInt,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x26)]
 #[allow(non_camel_case_types)]
@@ -158,7 +159,7 @@ pub struct CKeepAlive_Play {
     keep_alive_id: i64,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x2b)]
 #[allow(non_camel_case_types)]
@@ -186,7 +187,7 @@ pub struct CLogin_Play {
     //and many more
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x38)]
 /// Flags
@@ -206,7 +207,7 @@ pub struct CPlayerAbilities {
 /// `0x04` - Z
 /// `0x08` - Y_ROT (Pitch)
 /// `0x10` - X_ROT (Yaw)
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x40)]
 pub struct CSynchronizePlayerPosition {
@@ -219,7 +220,7 @@ pub struct CSynchronizePlayerPosition {
     teleport_id: VarInt,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x4d)]
 pub struct CSetBorderCenter {
@@ -227,7 +228,7 @@ pub struct CSetBorderCenter {
     z: f64,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x4e)]
 pub struct CSetBorderLerpSize {
@@ -236,35 +237,35 @@ pub struct CSetBorderLerpSize {
     speed: VarLong,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x4f)]
 pub struct CSetBorderSize {
     diameter: f64,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x50)]
 pub struct CSetBorderWarningDelay {
     warning_time: VarInt,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x51)]
 pub struct CBorderWarningDistance {
     warning_blocks: VarInt,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x53)]
 pub struct CSetHeldItem {
     slot: u8,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x64)]
 pub struct CUpdateTime {
@@ -272,7 +273,7 @@ pub struct CUpdateTime {
     time_of_day: i64,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Play)]
 #[id(0x6C)]
 pub struct CSystemChatMessage {

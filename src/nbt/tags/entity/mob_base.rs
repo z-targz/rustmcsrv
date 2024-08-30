@@ -135,6 +135,7 @@ pub trait TraitMobBase : TraitLivingBase {
 pub enum LeashInfo {
     Int(i32, i32, i32),
     UUID {
-        UUID: [i32;4],
+        #[serde(rename = "UUID")]
+        uuid: [i32;4],
     }
 }

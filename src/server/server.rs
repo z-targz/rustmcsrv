@@ -6,9 +6,7 @@ use std::sync::Mutex;
 use std::sync::RwLock;
 use std::sync::Weak;
 
-use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::IntoParallelRefMutIterator;
-use rayon::iter::ParallelIterator;
+
 use tokio::sync::RwLockReadGuard;
 use tokio::sync::RwLockWriteGuard;
 use uuid::Uuid;
@@ -42,18 +40,28 @@ pub struct Server {
     players: Players,
     entity_id_cap: Mutex<i32>,
     event_manager: EventManager,
+    is_running: bool,
 }
 
 impl Server {
     pub fn new(properties: ServerProperties) -> Self {
         let max_players = properties.get_max_players();
         Server { 
-            properties : properties,
-            worlds : HashMap::with_capacity(3),
-            players : Players::new(max_players),
-            entity_id_cap : Mutex::new(0),
-            event_manager : EventManager::new(),
+            properties: properties,
+            worlds: HashMap::with_capacity(3),
+            players: Players::new(max_players),
+            entity_id_cap: Mutex::new(0),
+            event_manager: EventManager::new(),
+            is_running: false,
         }
+    }
+
+    pub fn set_running(&mut self, value: bool) {
+        self.is_running = value;
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.is_running
     }
 
     pub async fn get_next_eid(&self) -> i32 {
@@ -69,7 +77,7 @@ impl Server {
     }
 
     pub async fn register_player(&self, player: Player) -> Result<Arc<Player>, ServerFullError> {
-        if self.players.get_num_players() == self.get_max_players() {
+        if self.players.get_num_players().await == self.get_max_players() {
             player.disconnect("Server is full!").await;
             return Err(ServerFullError);
         }
@@ -80,32 +88,65 @@ impl Server {
         self.get_properties().get_max_players()
     }
 
-    pub fn get_motd(&self) -> &String {
+    pub async fn get_num_players_async(&self) -> i32 {
+        self.players.get_num_players().await
+    }
+
+    pub fn get_num_players(&self) -> i32 {
+        crate::RUNTIME.block_on(self.get_num_players_async())
+    }
+
+    pub fn get_motd(&self) -> &str {
         &self.get_properties().get_motd()
     }
 
-    pub fn get_players_iter(&self) -> impl Iterator<Item = Weak<Player>> + '_ {
-        self.players.players_iter()
+    pub async fn get_players_async(&self) -> Vec<Weak<Player>> {
+        self.players.get_players().await
+    }
+
+    pub fn get_players(&self) -> Vec<Weak<Player>> {
+        crate::RUNTIME.block_on(self.get_players_async())
+    }
+
+    pub async fn get_player_by_id_async(&self, id: i32) -> Option<Weak<Player>> {
+        self.players.get_by_id(id).await
     }
 
     pub fn get_player_by_id(&self, id: i32) -> Option<Weak<Player>> {
-        self.players.get_by_id(id)
+        crate::RUNTIME.block_on(self.get_player_by_id_async(id))
+    }
+
+    pub async fn get_player_by_uuid_async(&self, uuid: Uuid) -> Option<Weak<Player>> {
+        self.players.get_by_uuid(uuid).await
     }
 
     pub fn get_player_by_uuid(&self, uuid: Uuid) -> Option<Weak<Player>> {
-        self.players.get_by_uuid(uuid)
+        crate::RUNTIME.block_on(self.get_player_by_uuid_async(uuid))
     }
 
-    pub fn get_player_by_name(&self, name: &String) -> Option<Weak<Player>> {
-        self.players.get_by_name(name)
+    pub async fn get_player_by_name_async(&self, name: &str) -> Option<Weak<Player>> {
+        self.players.get_by_name(name).await
+    }
+
+    pub fn get_player_by_name(&self, name: &str) -> Option<Weak<Player>> {
+        crate::RUNTIME.block_on(self.get_player_by_name_async(name))
+    }
+
+
+    pub async fn drop_player_by_id_async(&self, id: i32) {
+        self.players.drop_by_id(id).await;
     }
 
     pub fn drop_player_by_id(&self, id: i32) {
-        self.players.drop_by_id(id);
+        crate::RUNTIME.block_on(self.drop_player_by_id_async(id))
+    }
+
+    pub async fn drop_player_by_uuid_async(&self, uuid: Uuid) {
+        self.players.drop_by_uuid(uuid).await;
     }
 
     pub fn drop_player_by_uuid(&self, uuid: Uuid) {
-        self.players.drop_by_uuid(uuid);
+        crate::RUNTIME.block_on(self.drop_player_by_uuid_async(uuid))
     }
 
     pub async fn tick_worlds(&'static self) {

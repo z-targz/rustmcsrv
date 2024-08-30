@@ -13,7 +13,7 @@ use server_util::ConnectionState;
 use server_macros::CPacket;
 use server_macros::SPacket;
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Configuration)]
 #[id(1)]
 #[allow(non_camel_case_types)]
@@ -22,7 +22,7 @@ pub struct CPluginMessage_Config {
     data: InferredByteArray,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Configuration)]
 #[id(2)]
 #[allow(non_camel_case_types)]
@@ -30,12 +30,12 @@ pub struct CDisconnect_Config {
     reason: TextComponent<Nbt>, //TODO: text component
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Configuration)]
 #[id(3)]
 pub struct CFinishConfig {}
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Configuration)]
 #[id(4)]
 #[allow(non_camel_case_types)]
@@ -43,13 +43,14 @@ pub struct CKeepAlive_Config {
     keep_alive_id: i64,
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Configuration)]
 #[id(6)]
 pub struct CResetChat {}
 
 //id = 7
 const CREGISTRYDATA_ID: i32 = 7;
+#[derive(Debug)]
 pub struct CRegistryData {
     registry_name: String,
 }
@@ -96,7 +97,7 @@ impl CRegistryData {
     }
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Configuration)]
 #[id(8)]
 #[allow(non_camel_case_types)]
@@ -104,7 +105,7 @@ pub struct CRemoveResourcePack_Config {
     uuid: Option<Uuid>, //The resource pack's UUID
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Configuration)]
 #[id(9)]
 #[allow(non_camel_case_types)]
@@ -116,21 +117,21 @@ pub struct CAddResourcePack_Config {
     //prompt_message: Option<TextComponent>, TODO: implement NBT TextComponent
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Configuration)]
 #[id(0x0c)]
 pub struct CFeatureFlags {
     features: IdentifierArray
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Configuration)]
 #[id(0x0d)]
 pub struct CUpdateTags {
     tag_registries: Vec<TagRegistry>
 }
 
-#[derive(CPacket)]
+#[derive(CPacket, Debug)]
 #[state(Configuration)]
 #[id(0x0e)]
 pub struct CKnownPacks {
