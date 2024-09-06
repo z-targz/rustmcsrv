@@ -9,11 +9,12 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use itertools::Itertools;
 use yaml_rust::scanner::Token;
 
+use crate::command::argument::ArgType;
 use crate::COMMAND_MAP;
 use crate::{data_types::{Angle, Identifier}, event::{self, events::command::CommandEvent, EventResult}, player::Player, CONSOLE, RUNTIME, THE_SERVER};
 
 use super::argument::Argument;
-use super::command_tree::{CommandNode};
+use super::command_tree::CommandNode;
 
 #[derive(Debug, Clone)]
 pub struct Command {
@@ -25,28 +26,6 @@ pub struct Command {
     func: fn(&mut CommandEvent) -> EventResult,
 }
 
-
-
-
-
-
-
-
-
-// impl Display for CommandUsage {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         let mandatory = self.iter()
-//             .map(|args| {
-//                 args.iter().map(|a| a.get_name()).join("|") 
-//             }).map(|arg| format!("<{arg}>")).join(" ");
-//         let optional = self.optional_args.iter()
-//         .map(|args| {
-//             args.iter().map(|a| a.get_name()).join("|") 
-//         }).map(|arg| format!("[{arg}]")).join(" ");
-//         f.write_fmt(format_args!("/{} {} {}", self.name, mandatory, optional))
-//     }
-// }
-
 impl Command {
     pub fn get_name(&self) -> &str {
         &self.name
@@ -56,7 +35,7 @@ impl Command {
         self.description.as_ref()
     }
 
-    pub fn get_usages(&self) -> Vec<Argument> {
+    pub fn get_usages(&self) -> Vec<CommandUsage> {
         todo!()
     }
 
@@ -73,86 +52,35 @@ impl Command {
     }
 }
 
-impl Command {
-    pub fn new(
-        name: &str, 
-        description: Option<&str>, 
-        usages: CommandUsage, 
-        permission: Option<&str>, 
-        aliases: &[String], 
-        func: fn(&mut CommandEvent) -> EventResult,
-    ) -> Self {
-        Self {
-            name: name.to_string(),
-            description: description.map(str::to_string),
-            usages: usage,
-            aliases: aliases.to_vec(),
-            permission: permission.map(str::to_string),
-            func: func,
-        }
-    }
-
-    pub fn execute(e: &mut CommandEvent) {
-        crate::RUNTIME.block_on(run_command(e));
-    }
-
-    pub fn parse_input(
-        input: &mut String, 
-        usage: &CommandUsage
-    ) -> Result<(String, Vec<CommandArg>), ParseError> {
-
-        let chars = input.chars();
-
-        let label = input
-            .chars()
-            .take_while_ref(|c| !c.is_whitespace())
-            .collect::<String>();
-
-        let mut expecting_mandatory: VecDeque<_> = 
-            usage.mandatory_args.into();
-
-        let mut expecting_optional: VecDeque<_> = 
-            usage.optional_args.into();
-
-        let mut args: Vec<CommandArg> = vec![];
-        let mut remaining: String = chars
-            .skip_while(|c| c.is_whitespace())
-            .collect();
-
-        while !remaining.is_empty() {
-
-            if expecting_mandatory.is_empty() {
-                if expecting_optional.is_empty() {
-                    return Err(ParseError::TooManyArguments);
-                } else {
-                    break;
-                }
+fn get_usages<'a>(
+    node: &CommandNode, 
+    prefix: Vec<&'a Argument>
+) -> Vec<Vec<&'a Argument>> {
+    let mut out = Vec::new();
+    node.get_children().iter()
+        .map(|child| {
+            let mut new = prefix.clone();
+            new.push(arg);
+            match child.get_argument().is_last() {
+                true => {
+                    out.push(new);
+                },
+                false => {
+                    child.get_children().iter().for_each(|ch| {
+                        out.push(get_usage(ch, new));
+                    })
+                },
             }
+        })
+        .for_each(|arg| {
+            
+    })
+    out
+}
 
-            let expecting = expecting_mandatory
-                .pop_front()
-                .unwrap();
 
-            args.push(parse_next_arg(
-                &mut remaining, 
-                &expecting
-            )?);
-        }
-
-        if !expecting_mandatory.is_empty() {
-            return Err(ParseError::MissingArguments { 
-                message: expecting_mandatory.into_iter()
-                    .map(|args| {
-                        args.iter()
-                            .map(|a| a.to_string())
-                            .join("|")
-                    }).join(", ")
-            });
-        }
-        
-        
-        Ok((label, args))
-    }
+pub struct CommandUsage<'a> {
+    usage: Vec<&'a Argument>,
 }
 
 #[derive(Debug, Clone)]
@@ -190,9 +118,72 @@ impl Display for ParseError {
     }
 }
 
+impl Command {
+    pub fn new(
+        name: &str, 
+        description: Option<&str>, 
+        usages: CommandNode, 
+        permission: Option<&str>, 
+        aliases: &[String], 
+        func: fn(&mut CommandEvent) -> EventResult,
+    ) -> Self {
+        Self {
+            name: name.to_string(),
+            description: description.map(str::to_string),
+            usages: usages,
+            aliases: aliases.to_vec(),
+            permission: permission.map(str::to_string),
+            func: func,
+        }
+    }
+
+    pub fn execute(e: &mut CommandEvent) {
+        crate::RUNTIME.block_on(run_command(e));
+    }
+
+    pub fn parse_input(
+        input: &mut String, 
+        usages: &CommandNode
+    ) -> Result<(String, Vec<CommandArg>), ParseError> {
+
+        let chars = input.chars();
+
+        let label = match parse_next_arg(
+            input, 
+            &[usages.get_argument()]
+        )? {
+            CommandArg::Command(label) => Ok(label),
+            _ => Err(ParseError::Other { message: "Input empty".into() }),
+        }?;
+
+        let mut tree = usages.clone();
+
+        let mut args: Vec<CommandArg> = vec![];
+        let mut remaining: String = chars
+            .skip_while(|c| c.is_whitespace())
+            .collect();
+
+        while !remaining.is_empty() {
+            let result = parse_next_arg(
+                &mut remaining, 
+                tree.get_expecting().as_slice()
+            )?;
+            tree = ;
+            args.push(result); 
+        }
+
+        
+        
+        
+        Ok((label, args))
+    }
+}
+
+
+
 fn parse_next_arg(
     remaining: &mut String, 
-    expecting: &[Argument],
+    expecting: &[&Argument],
 ) -> Result<CommandArg, ParseError> {
 
     fn eat_token(remaining: &mut String) -> String {
@@ -208,8 +199,9 @@ fn parse_next_arg(
 
     for arg in expecting {
         match arg.get_type() {
-            ArgType::Subcommand { usage } => {
-                if let Ok((n, u)) = Command::parse_input(remaining, usage) {
+            ArgType::Command => todo!(),
+            ArgType::Subcommand => {
+                if let Ok((n, u)) = Command::parse_input(remaining, usages) {
                     return Ok(CommandArg::Subcommand(n, u));
                 };
             },
@@ -226,6 +218,7 @@ fn parse_next_arg(
             ArgType::Angle => todo!(),
             ArgType::Player => todo!(),
             ArgType::Identifier => todo!(),
+            
         }
     }
     return 
@@ -411,8 +404,8 @@ impl Display for CommandError {
             }
             CommandError::InvalidUsage { command } => {
                 f.write_fmt(format_args!(
-                    "Incorrect arguments for {}. Usage: /{}.", 
-                    command.name, command.usage
+                    "Incorrect arguments for {}. Do /help {}", 
+                    &command.name, command.name
                 ))
             }
             CommandError::Other { message } => {
@@ -432,6 +425,7 @@ impl Display for CommandError {
 
 
 pub enum CommandArg {
+    Command(String),
     Subcommand(String, Vec<CommandArg>),
     Bool(bool),
     Float(f32),
