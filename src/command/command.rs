@@ -1,3 +1,4 @@
+use core::slice::SlicePattern;
 use std::str::{FromStr, ParseBoolError};
 use std::{error::Error, fmt::Debug};
 use std::fmt::{Arguments, Display};
@@ -53,34 +54,67 @@ impl Command {
 }
 
 fn get_usages<'a>(
-    node: &CommandNode, 
-    prefix: Vec<&'a Argument>
-) -> Vec<Vec<&'a Argument>> {
+    node: &'a CommandNode, 
+    prefix: Vec<Vec<&'a Argument>>
+) -> Vec<Vec<Vec<&'a Argument>>> {
     let mut out = Vec::new();
-    node.get_children().iter()
-        .map(|child| {
-            let mut new = prefix.clone();
-            new.push(arg);
-            match child.get_argument().is_last() {
-                true => {
-                    out.push(new);
-                },
-                false => {
-                    child.get_children().iter().for_each(|ch| {
-                        out.push(get_usage(ch, new));
-                    })
-                },
+    
+    struct GroupedTreeNode<'a> {
+        args: Vec<&'a Argument>,
+        children: Vec<Self>,
+    }
+
+    impl<'a> GroupedTreeNode {
+        fn is_subset(&self, cmd_node: &CommandNode) -> bool {
+
+        }
+    }
+
+    fn group_args<'a>(node: &'a CommandNode) -> GroupedTreeNode<'a> {
+
+        let children_grouped = Vec::new();
+        for child in node.get_children() {
+            if children_grouped.is_empty() {
+                children_grouped.push(GroupedTreeNode {
+                    args: vec![node.get_argument()],
+                    children: node.get_children().iter().map(|ch| {
+                        group_args(ch)
+                    }).collect()
+                })
+            } else {
+                for group in children_grouped {
+                    if group.is_subset(node) {
+                        
+                    }
+                }
             }
-        })
-        .for_each(|arg| {
+        }
+        GroupedTreeNode {
+            args: vec![node.get_argument()],
             
-    })
+        }
+    }
+
+    node.get_children().iter()
+        .for_each(|child| {
+            let mut new = prefix.clone();
+            new.push(child.get_argument());
+            if child.is_last() {
+                out.push(new);
+            }
+            else {
+                child.get_children().iter()
+                    .for_each(|ch| {
+                    out.append(&mut get_usages(ch, new.clone()));
+                })
+            }
+        });
     out
 }
 
 
 pub struct CommandUsage<'a> {
-    usage: Vec<&'a Argument>,
+    usage: Vec<Vec<&'a Argument>>,
 }
 
 #[derive(Debug, Clone)]
@@ -124,7 +158,7 @@ impl Command {
         description: Option<&str>, 
         usages: CommandNode, 
         permission: Option<&str>, 
-        aliases: &[String], 
+        aliases: &[String],
         func: fn(&mut CommandEvent) -> EventResult,
     ) -> Self {
         Self {
@@ -283,7 +317,7 @@ impl CommandMapBuilder {
                 Command::new(
                     "stop", 
                     Some("Stops the server."), 
-                    CommandUsage::new("stop", &[], &[]), 
+                    CommandNode::single_usage("stop", &vec![]),
                     Some("stop"), 
                     &[],
                     command_stop

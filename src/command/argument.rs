@@ -42,13 +42,12 @@ pub struct Argument {
     name: String,
     arg_type: ArgType,
     is_mandatory: bool,
-    is_last: bool,
 }
 
 impl Argument {
 
-    pub fn new(name: String, arg_type: ArgType, is_mandatory: bool, is_last: bool) -> Self {
-        Self { name, arg_type, is_mandatory, is_last }
+    pub fn new(name: String, arg_type: ArgType, is_mandatory: bool) -> Self {
+        Self { name, arg_type, is_mandatory }
     }
     
     pub fn get_name(&self) -> &str {
@@ -67,22 +66,11 @@ impl Argument {
         self.is_mandatory
     }
 
-    pub fn is_last(&self) -> bool {
-        self.is_last
-    }
 }
 
 impl Display for Argument {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.is_last {
-            true => write!(f, "{}", self.name),
-            false => match self.is_mandatory {
-                true => write!(f, "<{}>", self.name),
-                false => write!(f, "[{}]", self.name),
-            },
-        }
-        
-        
+        write!(f, "{}", self.name)
     }
 }
 
