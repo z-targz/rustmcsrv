@@ -5,7 +5,7 @@ pub struct IterEndError;
 
 impl IterEndError {
     pub fn new() -> Self {
-        IterEndError { }
+        IterEndError {}
     }
 }
 

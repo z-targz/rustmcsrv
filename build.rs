@@ -1,5 +1,9 @@
-use std::{fs::OpenOptions, io::{self, Write}, path::Path, process::Command};
-
+use std::{
+    fs::OpenOptions,
+    io::{self, Write},
+    path::Path,
+    process::Command,
+};
 
 fn main() {
     if !registry_exists() {
@@ -9,9 +13,7 @@ fn main() {
 }
 
 fn download_server_jar_from_mojang() {
-    let path = Path::new(
-            std::env::var("CARGO_MANIFEST_DIR").unwrap().as_str()
-        ).join("server.jar");
+    let path = Path::new(std::env::var("CARGO_MANIFEST_DIR").unwrap().as_str()).join("server.jar");
 
     if std::fs::exists(path.clone()).unwrap_or(false) {
         return;
@@ -22,28 +24,37 @@ fn download_server_jar_from_mojang() {
     ).expect("request failed");
 
     let bytes = resp.bytes().unwrap().into_iter().collect::<Vec<u8>>();
-    let mut file = OpenOptions::new().create(true).write(true).open(path).unwrap();
-    file.write_all(bytes.as_slice()).expect("File system access isn't working.");
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(path)
+        .unwrap();
+    file.write_all(bytes.as_slice())
+        .expect("File system access isn't working.");
 }
 
 fn registry_exists() -> bool {
-    let path = Path::new(
-        std::env::var("CARGO_MANIFEST_DIR").unwrap().as_str()
-    ).join("generated");
+    let path = Path::new(std::env::var("CARGO_MANIFEST_DIR").unwrap().as_str()).join("generated");
 
     if std::fs::exists(path.join("data")).unwrap_or(false)
-        && std::fs::exists(path.join("reports/registries.json")).unwrap_or(false) 
+        && std::fs::exists(path.join("reports/registries.json")).unwrap_or(false)
     {
-        return true
+        return true;
     }
     false
 }
 
 fn generate_data() {
     let output = Command::new("java")
-        .args(["-DbundlerMainClass=net.minecraft.data.Main", "-jar", "server.jar", "--reports", "--server"])
-        .output().unwrap();
+        .args([
+            "-DbundlerMainClass=net.minecraft.data.Main",
+            "-jar",
+            "server.jar",
+            "--reports",
+            "--server",
+        ])
+        .output()
+        .unwrap();
     io::stdout().write_all(&output.stdout).unwrap();
     io::stderr().write_all(&output.stderr).unwrap();
 }
-

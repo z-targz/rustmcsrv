@@ -168,8 +168,8 @@ impl Server {
         &self.event_manager
     }
 
-    pub async fn register_event_handler<E: TraitEvent + PartialEq + Clone + 'static>(&self, handler: EventHandler<E>) {
-        self.get_event_manager().register_event_handler::<E>(handler).await;
+    pub fn register_event_handler<E: TraitEvent + PartialEq + Clone + 'static>(&self, handler: EventHandler<E>) {
+        self.get_event_manager().register_event_handler::<E>(handler);
     }
 
 }

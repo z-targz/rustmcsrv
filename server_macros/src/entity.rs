@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-pub (in super) enum EntityMacroError {
+pub(super) enum EntityMacroError {
     IOError(std::io::Error),
     SynError(syn::Error),
     Other(String),

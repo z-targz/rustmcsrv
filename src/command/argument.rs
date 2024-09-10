@@ -3,19 +3,16 @@ use std::{
     hash::Hash
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialOrd)]
 pub enum ArgType {
-    Command,
+    Command { label: String },
     Subcommand,
     Bool,
-    Float { properties: Option<NumericArgProperties<f32>> },
-    Double { properties: Option<NumericArgProperties<f64>> },
-    Int { properties: Option<NumericArgProperties<i32>> },
-    Long { properties: Option<NumericArgProperties<i64>> },
+    Float { bounds: Option<NumericArgProperties<f32>> },
+    Double { bounds: Option<NumericArgProperties<f64>> },
+    Int { bounds: Option<NumericArgProperties<i32>> },
+    Long { bounds: Option<NumericArgProperties<i64>> },
     String { properties: Option<StringArgProperties> },
-    Angle,
-    Player,
-    Identifier,
 }
 
 impl PartialEq for ArgType {
@@ -42,6 +39,18 @@ pub struct Argument {
     name: String,
     arg_type: ArgType,
     is_mandatory: bool,
+}
+
+impl PartialOrd for Argument {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.name.partial_cmp(&other.name)
+    }
+}
+
+impl Ord for Argument {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.name.cmp(&other.name)
+    }
 }
 
 impl Argument {
@@ -74,30 +83,42 @@ impl Display for Argument {
     }
 }
 
+
+
 trait Properties {}
 
-trait Numeric: Display {}
+trait Numeric: Display + Copy {}
 impl Numeric for i32 {}
 impl Numeric for i64 {}
 impl Numeric for f32 {}
 impl Numeric for f64 {}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub struct NumericArgProperties<T: Numeric> {
     max: T,
     min: T
 }
 
+impl<T: Numeric> NumericArgProperties<T> {
+    pub fn get_min(&self) -> T {
+        self.min
+    }
+
+    pub fn get_max(&self) -> T {
+        self.max
+    }
+}
+
 impl<T: Numeric> Properties for NumericArgProperties<T> {}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd)]
 pub struct StringArgProperties {
     r#type: StringType
 }
 
 impl Properties for StringArgProperties {}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd)]
 pub enum StringType {
     Word,
     Phrase,

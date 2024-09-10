@@ -87,7 +87,7 @@ impl CommandNode {
             last: args.len() > 0,
             arg: Argument::new(
                 label.to_owned(), 
-                ArgType::Command, 
+                ArgType::Command { label: label.to_string() }, 
                 true
             ),
             children: 

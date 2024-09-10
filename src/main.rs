@@ -185,12 +185,12 @@ async fn enable() {
     //TODO: load plugins, load commands from plugins, register events
     THE_SERVER.get_event_manager().register_event_handler::<EventOnEnable>(
         EventHandler::new(EventPriority::Normal, test_on_enable)
-    ).await;
+    );
     *COMMAND_MAP.lock().await = Some(command_map_builder.build());
     event::listen::<EventOnEnable>(
         THE_SERVER.get_event_manager(), 
         &mut EventOnEnable::new()
-    ).await;
+    );
 }
 
 async fn scheduler(mut stop: broadcast::Receiver<bool>) {
@@ -235,7 +235,7 @@ async fn disable() {
     event::listen::<EventOnDisable>(
         THE_SERVER.get_event_manager(), 
         &mut EventOnDisable::new()
-    ).await;
+    );
 
     *COMMAND_MAP.lock().await = None;
 

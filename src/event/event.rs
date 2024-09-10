@@ -1,6 +1,5 @@
-use std::{alloc::Allocator, any::{Any, TypeId}, collections::{HashMap, HashSet}, hash::Hash, marker::PhantomData};
+use std::{alloc::Allocator, any::{Any, TypeId}, collections::{HashMap, HashSet}, hash::Hash, marker::PhantomData, sync::RwLock};
 
-use tokio::sync::RwLock;
 
 
 mod private {
@@ -22,8 +21,8 @@ impl EventManager {
         &self.event_map
     }
 
-    pub async fn register_event_handler<E: TraitEvent + PartialEq + Clone + 'static + ?Sized>(&self, handler: EventHandler<E>) {
-        let mut lock = self.event_map.write().await;
+    pub fn register_event_handler<E: TraitEvent + PartialEq + Clone + 'static + ?Sized>(&self, handler: EventHandler<E>) {
+        let mut lock = self.event_map.write().unwrap();
         match lock.get_mut(&TypeId::of::<E>()) {
             Some(list) => {
                 unsafe { &mut *(list as *mut dyn Any as *mut Box<HandlerList<E>>) }.register(handler);
@@ -38,8 +37,8 @@ impl EventManager {
 }
 
 
-pub async fn listen<E: TraitEvent + Clone + 'static>(manager: &EventManager, e: &mut E) -> EventResult {
-    match manager.get_event_map().read().await.get(&TypeId::of::<E>()) {
+pub fn listen<E: TraitEvent + Clone + 'static>(manager: &EventManager, e: &mut E) -> EventResult {
+    match manager.get_event_map().read().unwrap().get(&TypeId::of::<E>()) {
         Some(ref_box) => {
             let list = unsafe { &*(ref_box as *const dyn Any as *const Box<HandlerList<E>>) };
             let mut result: EventResult = EventResult::Default;

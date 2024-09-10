@@ -1,12 +1,13 @@
-
-use std::{fmt::Debug, fs::File, io::Read, path::{Path, PathBuf}};
-
-
+use std::{
+    fmt::Debug,
+    fs::File,
+    io::Read,
+    path::{Path, PathBuf},
+};
 
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::visit::Visit;
-
 
 /*
 lazy_static!{
@@ -14,9 +15,7 @@ lazy_static!{
 }
 */
 
-
-
-pub (in crate) enum EntityMacroError {
+pub(crate) enum EntityMacroError {
     IOError(std::io::Error),
     SynError(syn::Error),
     Other(String),
@@ -62,47 +61,48 @@ impl From<String> for EntityMacroError {
     }
 }
 
-
-
 #[proc_macro]
 pub fn create_entity_macros(_: TokenStream) -> TokenStream {
-    
     let mut out = String::new();
     let cargo_manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
 
     let files = std::fs::read_dir(
-        Path::new(cargo_manifest_dir.as_str()).parent().unwrap()
-        .join("src")
-        .join("entity")
-        .join("entities")).unwrap();
-    
+        Path::new(cargo_manifest_dir.as_str())
+            .parent()
+            .unwrap()
+            .join("src")
+            .join("entity")
+            .join("entities"),
+    )
+    .unwrap();
 
-    let result = files.into_iter()
+    let result = files
+        .into_iter()
         .map(|result| {
             match result {
                 Ok(dir_entry) => {
-                    let module_path = 
-                    dir_entry
+                    let module_path = dir_entry
                         .path()
                         .iter()
                         .map(|segment| segment.to_str().unwrap().trim_end_matches(".rs").to_owned())
                         .collect::<Vec<_>>()
                         .join("::");
-                        
+
                     let mut file_contents = String::new();
                     File::open(dir_entry.path())?.read_to_string(&mut file_contents)?;
                     let file_src = syn::parse_file(&file_contents.as_str())?;
-                    
+
                     struct FileVisitor {
                         pub tag_names: Vec<String>,
                     }
                     impl FileVisitor {
                         pub fn new(_file_path: PathBuf) -> Self {
-                            Self { tag_names: Vec::new() }
+                            Self {
+                                tag_names: Vec::new(),
+                            }
                         }
                     }
-                    impl <'ast> Visit<'ast> for FileVisitor {
-                        
+                    impl<'ast> Visit<'ast> for FileVisitor {
                         fn visit_item_struct(&mut self, item: &'ast syn::ItemStruct) {
                             let mut to_add: bool = false;
                             for attr in &item.attrs {
@@ -111,7 +111,7 @@ pub fn create_entity_macros(_: TokenStream) -> TokenStream {
                                         if ident.to_string().as_str() == "entity_tag" {
                                             to_add = true;
                                         }
-                                    },
+                                    }
                                     None => (),
                                 }
                             }
@@ -123,48 +123,43 @@ pub fn create_entity_macros(_: TokenStream) -> TokenStream {
                     let mut file_visitor = FileVisitor::new(dir_entry.path());
                     file_visitor.visit_file(&file_src);
 
-
                     //let tag_name = module_name.to_case(Case::Pascal);
                     Ok((file_visitor.tag_names, module_path))
-                },
+                }
                 Err(e) => Err(EntityMacroError::IOError(e)),
             }
-            
-            })
-        .map(|result|
-        {
-            match result {
-                Ok((tag_names, module_path)) => {
-                    tag_names.into_iter().for_each(|tag_name| {
-                        let module_name = module_path.split("::").last().unwrap();
-                        out += format!("
+        })
+        .map(|result| match result {
+            Ok((tag_names, module_path)) => {
+                tag_names.into_iter().for_each(|tag_name| {
+                    let module_name = module_path.split("::").last().unwrap();
+                    out += format!(
+                        "
                             #[proc_macro_derive({tag_name})]
                             pub fn derive_{module_name}(input: TokenStream) -> TokenStream {{
                                 let ast = syn::parse(input).unwrap();
                                 entity::register_entity_tag(ast, \"{tag_name}\", \"{module_path}\");
                                 quote!{{}}.into()
                             }}"
-                        ).as_str();
-                    });
-                    Ok(())
-                },
-                Err(e) => Err(e),
+                    )
+                    .as_str();
+                });
+                Ok(())
             }
-        }).collect::<Result<(),EntityMacroError>>();
+            Err(e) => Err(e),
+        })
+        .collect::<Result<(), EntityMacroError>>();
     match result {
         Ok(_) => {
             let out: proc_macro2::TokenStream = out.parse().unwrap();
             out.into()
-        },
+        }
         Err(e) => {
             let error_string = e.to_string();
-            quote!{compile_error!{#error_string}}.into()
+            quote! {compile_error!{#error_string}}.into()
         }
     }
-    
 }
-
-
 
 /*#[proc_macro]
 pub fn create_entity_attribute_macros(_: TokenStream) -> TokenStream {

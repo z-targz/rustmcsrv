@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RegistriesJSON {
-    registries: HashMap<String, TagRegistry>
+    registries: HashMap<String, TagRegistry>,
 }
 
 impl RegistriesJSON {
@@ -17,9 +17,7 @@ impl RegistriesJSON {
             .join("registries.json");
 
         RegistriesJSON {
-            registries: serde_json::de::from_reader(
-                File::open(path).unwrap()
-            ).unwrap()
+            registries: serde_json::de::from_reader(File::open(path).unwrap()).unwrap(),
         }
     }
 }
@@ -30,8 +28,6 @@ pub struct TagRegistry {
     default: Option<String>,
     entries: HashMap<String, Entry>,
 }
-
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Entry {
@@ -46,11 +42,11 @@ pub struct Mapping {
 impl Mapping {
     pub fn from_tag_registry(tag_registry: TagRegistry) -> Self {
         Mapping {
-            mappings: tag_registry.entries
+            mappings: tag_registry
+                .entries
                 .into_iter()
-                .map(|(entry_name, entry)| {
-                    (entry_name, entry.protocol_id)
-                }).collect::<HashMap<String, i32>>(),
+                .map(|(entry_name, entry)| (entry_name, entry.protocol_id))
+                .collect::<HashMap<String, i32>>(),
         }
     }
 
@@ -60,7 +56,9 @@ impl Mapping {
 }
 
 pub fn read_registry_json() -> HashMap<String, Mapping> {
-    RegistriesJSON::new().registries.into_iter().map(|(entry_name, entry_data)| {
-        (entry_name, Mapping::from_tag_registry(entry_data))
-    }).collect::<HashMap<String, Mapping>>()
+    RegistriesJSON::new()
+        .registries
+        .into_iter()
+        .map(|(entry_name, entry_data)| (entry_name, Mapping::from_tag_registry(entry_data)))
+        .collect::<HashMap<String, Mapping>>()
 }

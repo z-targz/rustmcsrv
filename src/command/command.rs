@@ -1,8 +1,9 @@
-use core::slice::SlicePattern;
+
 use std::str::{FromStr, ParseBoolError};
 use std::{error::Error, fmt::Debug};
 use std::fmt::{Arguments, Display};
 use std::sync::Weak;
+use itertools::EitherOrBoth;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -59,46 +60,92 @@ fn get_usages<'a>(
 ) -> Vec<Vec<Vec<&'a Argument>>> {
     let mut out = Vec::new();
     
+    #[derive(PartialEq, PartialOrd, Eq, Ord)]
     struct GroupedTreeNode<'a> {
+        last: bool,
         args: Vec<&'a Argument>,
         children: Vec<Self>,
     }
 
-    impl<'a> GroupedTreeNode {
-        fn is_subset(&self, cmd_node: &CommandNode) -> bool {
+    impl<'a> GroupedTreeNode<'a> {
+        fn compare(&self, other: &Self) -> bool {
+            if self.last && other.last {
+                return true;
+            } else if self.last || other.last {
+                return false;
+            } else {
+                return self.children.iter()
+                    .zip(other.children.iter())
+                    .map(|(a, b)| a.compare(b))
+                    .fold(true, |a, e| a & e);
+            }
+        }
+    }
 
+    impl<'a> From<&'a CommandNode> for GroupedTreeNode<'a> {
+        fn from(node: &'a CommandNode) -> Self {
+            Self {
+                last: node.is_last(),
+                args: vec![node.get_argument()],
+                children: 
+                if node.is_last() { vec![] } else {
+                    node.get_children().iter().map(|child| {
+                        child.into()
+                    }).sorted().collect()
+                }
+            }
         }
     }
 
     fn group_args<'a>(node: &'a CommandNode) -> GroupedTreeNode<'a> {
 
-        let children_grouped = Vec::new();
-        for child in node.get_children() {
-            if children_grouped.is_empty() {
-                children_grouped.push(GroupedTreeNode {
-                    args: vec![node.get_argument()],
-                    children: node.get_children().iter().map(|ch| {
-                        group_args(ch)
-                    }).collect()
-                })
-            } else {
-                for group in children_grouped {
-                    if group.is_subset(node) {
-                        
-                    }
-                }
+
+        fn group<'a>(node: GroupedTreeNode<'a>) -> GroupedTreeNode<'a> {
+            if node.last {
+                return node;
             }
-        }
-        GroupedTreeNode {
-            args: vec![node.get_argument()],
             
+            let (last, args, mut children) = 
+                (
+                    node.last,
+                    node.args, 
+                    node.children.into_iter()
+                        .map(|child| group(child))
+                        .sorted()
+                        .collect::<Vec<_>>()
+                );
+
+            children.dedup_by(|a, b| {
+                if a.compare(b) {
+                    b.args.append(&mut a.args);
+                    true
+                } else {
+                    false
+                }
+            });
+
+            GroupedTreeNode { last, args, children }
         }
+
+        let mut grouped_tree = GroupedTreeNode {
+            last: node.is_last(),
+            args: vec![node.get_argument()],
+            children: vec![],
+        };
+
+        for child in node.get_children() {
+            grouped_tree.children.push(child.into());
+        }
+
+        
+
+        grouped_tree
     }
 
     node.get_children().iter()
         .for_each(|child| {
             let mut new = prefix.clone();
-            new.push(child.get_argument());
+            new.push(vec![child.get_argument()]);
             if child.is_last() {
                 out.push(new);
             }
@@ -180,7 +227,7 @@ impl Command {
         usages: &CommandNode
     ) -> Result<(String, Vec<CommandArg>), ParseError> {
 
-        let chars = input.chars();
+        
 
         let label = match parse_next_arg(
             input, 
@@ -189,6 +236,8 @@ impl Command {
             CommandArg::Command(label) => Ok(label),
             _ => Err(ParseError::Other { message: "Input empty".into() }),
         }?;
+
+        let chars = input.chars();
 
         let mut tree = usages.clone();
 
@@ -202,7 +251,8 @@ impl Command {
                 &mut remaining, 
                 tree.get_expecting().as_slice()
             )?;
-            tree = ;
+            
+            //tree = ;
             args.push(result); 
         }
 
@@ -230,32 +280,58 @@ fn parse_next_arg(
     }   
     
     
-
+    let token = eat_token(remaining);
     for arg in expecting {
         match arg.get_type() {
-            ArgType::Command => todo!(),
+            ArgType::Command { label } => todo!(),
             ArgType::Subcommand => {
-                if let Ok((n, u)) = Command::parse_input(remaining, usages) {
-                    return Ok(CommandArg::Subcommand(n, u));
-                };
+
             },
             ArgType::Bool => {
-                if let val = CommandArg::Bool(eat_token(remaining).parse()?) {
-                    return val
+                if let Ok(val) = token.parse() {
+                    return Ok(CommandArg::Bool(val));
                 }
             },
-            ArgType::Float { properties } => todo!(),
-            ArgType::Double { properties } => todo!(),
-            ArgType::Int { properties } => todo!(),
-            ArgType::Long { properties } => todo!(),
+            ArgType::Float { bounds } => {
+                if let Ok(val) = token.parse::<f32>() {
+                    if let Some(props) = bounds {
+                        if props.get_min() < val && val < props.get_max() {
+                            return Ok(CommandArg::Float(val))
+                        }
+                    } else {
+                        return Ok(CommandArg::Float(val))
+                    }
+                }
+            },
+            ArgType::Double { bounds } => {
+                if let Ok(val) = token.parse::<f64>() {
+                    if let Some(props) = bounds {
+                        if props.get_min() < val && val < props.get_max() {
+                            return Ok(CommandArg::Double(val))
+                        }
+                    } else {
+                        return Ok(CommandArg::Double(val))
+                    }
+                }
+            },
+            ArgType::Int { bounds } => 
+                if let Ok(val) = token.parse::<i32>() {
+                    if let Some(props) = bounds {
+                        if props.get_min() < val && val < props.get_max() {
+                            return Ok(CommandArg::Int(val))
+                        }
+                    } else {
+                        return Ok(CommandArg::Int(val))
+                    }
+                },
+            ArgType::Long { bounds } => todo!(),
             ArgType::String { properties } => todo!(),
-            ArgType::Angle => todo!(),
-            ArgType::Player => todo!(),
-            ArgType::Identifier => todo!(),
-            
         }
     }
-    return 
+    return Err(ParseError::IncorrectArguments { message: format!(
+        "Invalid argument {token}, expecting {}.",
+        expecting.iter().map(|arg| arg.get_name()).join("|")),
+    })
 }
 
 pub trait TraitCommand {
@@ -353,7 +429,7 @@ impl CommandMapBuilder {
 async fn run_command(e: &mut CommandEvent) -> EventResult {
 
     async fn run(evt: &mut CommandEvent) -> EventResult {
-        match event::listen(THE_SERVER.get_event_manager(), evt).await {
+        match event::listen(THE_SERVER.get_event_manager(), evt) {
             EventResult::Deny => EventResult::Deny,
             _ => (evt.get_command().func)(evt)
         }
@@ -467,17 +543,7 @@ pub enum CommandArg {
     Int(i32),
     Long(i64),
     String(String),
-    Angle(Angle),
-    BlockPos(f64, f64, f64),
-    BlockPredicate {
-        block_id: Identifier, 
-        block_states: Vec<(String, String)>,
-        data_tags: Vec<(String, String)>,     
-    },
-    Item(Identifier),
-    Structure(Identifier),
 
-    Vec3(f64, f64, f64),
 }
 
 

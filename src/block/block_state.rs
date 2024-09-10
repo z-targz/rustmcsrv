@@ -9,8 +9,10 @@ pub struct BlockState {
 }
 
 pub enum BlockStateValue {
+    Bool(bool),
     Byte(u8),
     Facing(Facing),
+
 }
 
 pub enum Facing {

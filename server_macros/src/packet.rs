@@ -1,20 +1,15 @@
 use proc_macro2::TokenStream;
-use quote::ToTokens;
 use quote::quote;
+use quote::ToTokens;
 use server_util::ConnectionState;
 use syn::Data;
 use syn::DataStruct;
 use syn::Fields;
 use syn::MetaList;
 
-pub (in super) fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
-    let (
-            name, 
-            id, 
-            state, 
-            fields
-        ) = impl_packet(ast);
-    /* 
+pub(super) fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
+    let (name, id, state, fields) = impl_packet(ast);
+    /*
      * impl Self, impl Clientbound
      */
     let mut fields_text: String = String::new();
@@ -41,15 +36,21 @@ pub (in super) fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
 
         fields_text += field.to_token_stream().to_string().as_str();
         fields_text += ", ";
-        
+
         assign += format!("{field_name} : {field_name}, ").as_str();
-
-
 
         let field_type = field.ty.to_token_stream().to_string();
         if field_type.starts_with("Option") {
             let option_type = extract_T_from_option(&field_type);
-            writes += format!("data.extend(create_option(self.{field_name}{}));", if borrow(option_type.as_str()) == "&" {".clone()"} else {""}).as_str();
+            writes += format!(
+                "data.extend(create_option(self.{field_name}{}));",
+                if borrow(option_type.as_str()) == "&" {
+                    ".clone()"
+                } else {
+                    ""
+                }
+            )
+            .as_str();
         } else {
             //writes += format!("data.extend({func}({}self.{field_name}));", borrow(field_type.as_str())).as_str();
             writes += format!("data.extend(self.{field_name}.to_protocol_bytes().iter());", /*borrow(field_type.as_str())*/).as_str();
@@ -94,35 +95,30 @@ pub (in super) fn impl_cpacket(ast: &syn::DeriveInput) -> TokenStream {
     gen.into()
 }
 
-pub(in super) fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
-    let (
-            name, 
-            id, 
-            state, 
-            fields
-        ) = impl_packet(ast);
+pub(super) fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
+    let (name, id, state, fields) = impl_packet(ast);
 
     match state {
         ConnectionState::Handshake => {
             let mut lock = crate::HANDSHAKE_PACKETS.lock().unwrap();
             lock.insert(id, name.to_string());
             drop(lock);
-        },
+        }
         ConnectionState::Status => {
             let mut lock = crate::STATUS_PACKETS.lock().unwrap();
             lock.insert(id, name.to_string());
             drop(lock);
-        },
+        }
         ConnectionState::Login => {
             let mut lock = crate::LOGIN_PACKETS.lock().unwrap();
             lock.insert(id, name.to_string());
             drop(lock);
-        },
+        }
         ConnectionState::Configuration => {
             let mut lock = crate::CONFIGURATION_PACKETS.lock().unwrap();
             lock.insert(id, name.to_string());
             drop(lock);
-        },
+        }
         ConnectionState::Play => {
             let mut lock = crate::PLAY_PACKETS.lock().unwrap();
             lock.insert(id, name.to_string());
@@ -130,7 +126,7 @@ pub(in super) fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
         }
     }
 
-    /* 
+    /*
      * impl Serverbound, Self
      */
 
@@ -162,24 +158,37 @@ pub(in super) fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
 
         if field_type.starts_with("Option") {
             let option_type = extract_T_from_option(&field_type);
-            
+
             let b = borrow(option_type.as_str());
             getters += format!("pub fn get_{field_name}(&self) -> Option<{b}{option_type}> {{ self.{field_name}{} }}", if b == "&" {".as_ref()"} else {""}).as_str();
 
-            let_reads += format!("let {field_name}: Option<{option_type}> = read_option(iter)?;").as_str();
+            let_reads +=
+                format!("let {field_name}: Option<{option_type}> = read_option(iter)?;").as_str();
         } else if field_type.starts_with("Vec") {
-            getters += format!("pub fn get_{field_name}(&self) -> &{field_type} {{ &self.{field_name} }}").as_str();
+            getters +=
+                format!("pub fn get_{field_name}(&self) -> &{field_type} {{ &self.{field_name} }}")
+                    .as_str();
 
-            let_reads += format!("let {field_name}: {field_type} = Vec::from_protocol_iter(iter)?;").as_str();
+            let_reads +=
+                format!("let {field_name}: {field_type} = Vec::from_protocol_iter(iter)?;")
+                    .as_str();
         } else if field_type == "String" {
-            getters += format!("pub fn get_{field_name}(&self) -> &str {{ &self.{field_name} }}").as_str();
+            getters +=
+                format!("pub fn get_{field_name}(&self) -> &str {{ &self.{field_name} }}").as_str();
 
-            let_reads += format!("let {field_name}: String = String::from_protocol_iter(iter)?;").as_str();
+            let_reads +=
+                format!("let {field_name}: String = String::from_protocol_iter(iter)?;").as_str();
         } else {
             let b = borrow(field_type.as_str());
-            getters += format!("pub fn get_{field_name}(&self) -> {b}{field_type} {{ {b}self.{field_name} }}").as_str();
+            getters += format!(
+                "pub fn get_{field_name}(&self) -> {b}{field_type} {{ {b}self.{field_name} }}"
+            )
+            .as_str();
 
-            let_reads += format!("let {field_name}: {field_type} = {field_type}::from_protocol_iter(iter)?;").as_str();
+            let_reads += format!(
+                "let {field_name}: {field_type} = {field_type}::from_protocol_iter(iter)?;"
+            )
+            .as_str();
         }
     }
 
@@ -211,7 +220,9 @@ pub(in super) fn impl_spacket(ast: &syn::DeriveInput) -> TokenStream {
     gen.into()
 }
 
-pub(in super) fn impl_packet(ast: &syn::DeriveInput) -> (&syn::Ident, i32, ConnectionState, &syn::FieldsNamed) {
+pub(super) fn impl_packet(
+    ast: &syn::DeriveInput,
+) -> (&syn::Ident, i32, ConnectionState, &syn::FieldsNamed) {
     let name = &ast.ident;
     let attributes = &ast.attrs;
     if attributes.len() < 2 {
@@ -221,10 +232,22 @@ pub(in super) fn impl_packet(ast: &syn::DeriveInput) -> (&syn::Ident, i32, Conne
     let mut state: ConnectionState = ConnectionState::Handshake;
 
     for attr in attributes {
-        if attr.path().get_ident().to_token_stream().to_string().as_str() == "doc" {
+        if attr
+            .path()
+            .get_ident()
+            .to_token_stream()
+            .to_string()
+            .as_str()
+            == "doc"
+        {
             continue;
         }
-        let meta_list: &MetaList = attr.meta.require_list().unwrap_or_else(|_| panic!("Missing arguments for {:?}", attr.path().get_ident().to_token_stream().to_string()));
+        let meta_list: &MetaList = attr.meta.require_list().unwrap_or_else(|_| {
+            panic!(
+                "Missing arguments for {:?}",
+                attr.path().get_ident().to_token_stream().to_string()
+            )
+        });
 
         if attr.path().is_ident("id") {
             let msg = "Argument to id must be a valid positive i32.";
@@ -236,7 +259,7 @@ pub(in super) fn impl_packet(ast: &syn::DeriveInput) -> (&syn::Ident, i32, Conne
             id = arg_as_int;
         } else if attr.path().is_ident("state") {
             let msg = "Argument to state must be a valid ConnectionState: (Handshake, Status, Login, Play, Configuration) }";
-            
+
             let arg: proc_macro2::TokenStream = meta_list.parse_args().expect(msg);
             match arg.to_string().as_str() {
                 "Handshake" => state = ConnectionState::Handshake,
@@ -250,18 +273,24 @@ pub(in super) fn impl_packet(ast: &syn::DeriveInput) -> (&syn::Ident, i32, Conne
     }
 
     let fields = match &ast.data {
-        Data::Struct(DataStruct{ fields: Fields::Named(it), struct_token : _, semi_token : _ }) => it,
+        Data::Struct(DataStruct {
+            fields: Fields::Named(it),
+            struct_token: _,
+            semi_token: _,
+        }) => it,
         Data::Struct(_) => panic!("Expected a `struct` with named fields."),
-        Data::Enum(_) | Data::Union(_) => panic!("#[Derive(CPacket)] is only implemented for `struct`s."),
+        Data::Enum(_) | Data::Union(_) => {
+            panic!("#[Derive(CPacket)] is only implemented for `struct`s.")
+        }
     };
-    
+
     (name, id, state, fields)
 }
 
 #[allow(non_snake_case)]
 fn extract_T_from_option(string: &String) -> String {
     let s = remove_whitespace(string);
-    s[7..s.len()-1].to_string()
+    s[7..s.len() - 1].to_string()
 }
 
 fn remove_whitespace(string: &String) -> String {
