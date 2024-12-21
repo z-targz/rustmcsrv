@@ -1,10 +1,26 @@
 use std::{alloc::Allocator, any::{Any, TypeId}, collections::{HashMap, HashSet}, hash::Hash, marker::PhantomData, sync::RwLock};
 
+pub use super::events::{
+    command::CommandEvent, 
+    on_disable::EventOnDisable, 
+    on_enable::EventOnEnable, 
+    player_login::EventPlayerLogin
+};
+
 
 
 mod private {
     pub trait Sealed {}
 }
+
+pub enum Event {
+    OnEnable { e: EventOnEnable },
+    OnDisable { e: EventOnDisable },
+    PlayerLogin { e: EventPlayerLogin },
+    Command { e: CommandEvent },
+}
+
+
 
 pub struct EventManager {
     event_map: RwLock<HashMap<TypeId, Box<HandlerList<dyn TraitEvent>>>>,
@@ -14,7 +30,9 @@ pub struct EventManager {
 impl EventManager {
 
     pub fn new() -> Self {
-        Self { event_map: RwLock::new(HashMap::new()) }
+        Self { 
+            event_map: RwLock::new(HashMap::new()),
+        }
     }
 
     pub fn get_event_map(&self) -> &RwLock<HashMap<TypeId, Box<HandlerList<dyn TraitEvent>>>> {
@@ -35,6 +53,7 @@ impl EventManager {
         }
     }
 }
+
 
 
 pub fn listen<E: TraitEvent + Clone + 'static>(manager: &EventManager, e: &mut E) -> EventResult {
